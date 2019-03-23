@@ -10,6 +10,8 @@
 #include <cstdint>
 #include <cstdio>
 
+#include <array>
+
 //#define RELEASE_VERSION
 #undef RELEASE_VERSION
 //--------------------------------------------------------------------------------------------------------
@@ -129,20 +131,220 @@ static void ClearCDB()
     }
 }
 
-static void InitSPTDStructureForREAD(unsigned char CDBLength, unsigned int NbSectors)
-{
-    // fill in sptd structure
-    sptd.Length             = sizeof(sptd);
-    sptd.PathId             = 0;                  // SCSI card ID will be filled in automatically
-    sptd.TargetId           = 0;                  // SCSI target ID will also be filled in
-    sptd.Lun                = 0;                  // SCSI lun ID will also be filled in
-    sptd.CdbLength          = CDBLength;          // CDB size
-    sptd.SenseInfoLength    = 0;                  // Don't return any sense data
-    sptd.DataIn             = SCSI_IOCTL_DATA_IN; // There will be data from drive
-    sptd.DataTransferLength = 2448 * NbSectors;   // Size of data
-    sptd.TimeOutValue       = 60;                 // SCSI timeout value
-    sptd.DataBuffer         = (PVOID)(DataBuf);
-    sptd.SenseInfoOffset    = 0;
+namespace Command {
+  std::array<std::uint8_t, 12> Read_A8h(long int TargetSector, int NbSectors, bool FUAbit) {
+    std::array<std::uint8_t, 12> rv = {
+          0xA8,
+          (FUAbit << 3),
+          (TargetSector>>24)&0xFF, // msb
+          (TargetSector>>16)&0xFF,
+          (TargetSector>>8)&0xFF,
+          (TargetSector)&0xFF,     // lsb
+          (NbSectors>>24)&0xFF,    // msb
+          (NbSectors>>16)&0xFF,
+          (NbSectors>>8)&0xFF,
+          (NbSectors)&0xFF,        // lsb
+          0, 0
+    };
+    return rv;
+  }
+
+  std::array<std::uint8_t, 10> Read_28h(long int TargetSector, int NbSectors, bool FUAbit) {
+    std::array<std::uint8_t, 10> rv = {
+      0x28,
+      (FUAbit << 3),
+      uint8_t((TargetSector>>24)&0xFF), // msb
+      uint8_t((TargetSector>>16)&0xFF),
+      uint8_t((TargetSector>>8)&0xFF),
+      uint8_t((TargetSector)&0xFF),     // lsb
+      0,
+      uint8_t((NbSectors>>8)&0xFF),     // msb
+      uint8_t((NbSectors)&0xFF),        // lsb
+      0
+    };
+    return rv;
+  }
+
+  std::array<std::uint8_t, 12> Read_BEh(long int TargetSector, int NbSectors) {
+    std::array<std::uint8_t, 12> rv = {
+      0xBE,
+      0x00,                             // 0x04 = audio data only, 0x00 = any type
+      uint8_t((TargetSector>>24)&0xFF), // address
+      uint8_t((TargetSector>>16)&0xFF),
+      uint8_t((TargetSector>>8)&0xFF),
+      uint8_t((TargetSector)&0xFF),
+      uint8_t((NbSectors>>16)&0xFF),    // size
+      uint8_t((NbSectors>>8)&0xFF),
+      uint8_t((NbSectors)&0xFF),
+      0x10,                             // just data
+      0,                                // no subcode
+      0
+    };
+    return rv;
+  }
+
+  std::array<std::uint8_t, 10> Read_D4h(long int TargetSector, int NbSectors, bool FUAbit) {
+    std::array<std::uint8_t, 10> rv = {
+    0xD4,
+    (FUAbit << 3),
+    uint8_t((TargetSector>>24)&0xFF), // msb
+    uint8_t((TargetSector>>16)&0xFF),
+    uint8_t((TargetSector>>8)&0xFF),
+    uint8_t((TargetSector)&0xFF),     // lsb
+    uint8_t((NbSectors>>16)&0xFF),
+    uint8_t((NbSectors>>8)&0xFF),
+    uint8_t((NbSectors)&0xFF),        // lsb
+    0
+    };
+    return rv;
+  }
+
+  std::array<std::uint8_t, 10> Read_D5h(long int TargetSector, int NbSectors, bool FUAbit) {
+    std::array<std::uint8_t, 10> rv = {
+    0xD5,
+    (FUAbit << 3),
+    uint8_t((TargetSector>>24)&0xFF), // msb
+    uint8_t((TargetSector>>16)&0xFF),
+    uint8_t((TargetSector>>8)&0xFF),
+    uint8_t((TargetSector)&0xFF),     // lsb
+    uint8_t((NbSectors>>16)&0xFF),
+    uint8_t((NbSectors>>8)&0xFF),
+    uint8_t((NbSectors)&0xFF),        // lsb
+    0
+    };
+    return rv;
+  }
+
+  std::array<std::uint8_t, 12> Read_D8h(long int TargetSector, int NbSectors, bool FUAbit) {
+    std::array<std::uint8_t, 12> rv = {
+    0xD8,
+    (FUAbit << 3),
+    uint8_t((TargetSector>>24)&0xFF), // msb
+    uint8_t((TargetSector>>16)&0xFF),
+    uint8_t((TargetSector>>8)&0xFF),
+    uint8_t((TargetSector)&0xFF),     // lsb
+    uint8_t((NbSectors>>24)&0xFF),    // msb
+    uint8_t((NbSectors>>16)&0xFF),
+    uint8_t((NbSectors>>8)&0xFF),
+    uint8_t((NbSectors)&0xFF),        // lsb
+    0, 0
+    };
+    return rv;
+  }
+
+  std::array<std::uint8_t, 12> PlextorFUAFlush(long int TargetSector) {
+    // this is just a Read28h with NbSectors = 0 and FUAbit = true. however, the original
+    // code declared the CDB size as 12. whether this was a typo or not remains unknown,
+    // which is why this code replicates the original behaviour.
+    std::array<std::uint8_t, 12> rv = {
+    0x28,       // READ(10) command
+    0x08,       // FUA
+    uint8_t((TargetSector>>24)&0xFF), // msb
+    uint8_t((TargetSector>>16)&0xFF),
+    uint8_t((TargetSector>>8)&0xFF),
+    uint8_t((TargetSector)&0xFF),     // lsb
+    0, 0, 0, 0, 0, 0
+    // size stays zero, that's how this command works
+    // MMC spec specifies that "A Transfer Length of zero indicates that no
+    // logical blocks shall be transferred. This condition shall not be
+    // considered an error"
+    };
+    return rv;
+  }
+  
+  std::array<std::uint8_t, 6> RequestSense(std::uint8_t AllocationLength) {
+    std::array<std::uint8_t, 6> rv = {
+    3,                  // REQUEST SENSE
+    0, 0, 0,
+    AllocationLength,   // allocation size
+    0
+    };
+    return rv;
+  }
+
+  std::array<std::uint8_t, 10> ModeSense(unsigned char PageCode, unsigned char SubPageCode, int size) {
+    std::array<std::uint8_t, 10> rv = {
+    0x5A,                     // MODE SENSE(10)
+    0,
+    PageCode,
+    SubPageCode,
+    0, 0, 0,
+    uint8_t((size>>8)&0xFF),     // size
+    uint8_t((size)&0xFF),
+    0
+    };
+    return rv;
+  }
+
+  std::array<std::uint8_t, 10> ModeSelect(unsigned char PageCode, unsigned char SubPageCode, int size) {
+    // SPC-4 declares bytes 2 to 6 of MODE SELECT as reserved - they should thus be set to zero. this replicates the behaviour of the original code,
+    // which puts the page and subpage codes there. this might've been just a copypasta error, though, since
+    // the assignment of the operation code contained a "MODE SENSE(10)".
+    std::array<std::uint8_t, 10> rv = {
+    0x55,                     // MODE SENSE(10)
+    0,
+    PageCode,
+    SubPageCode,
+    0, 0, 0,
+    uint8_t((size>>8)&0xFF),     // size
+    uint8_t((size)&0xFF),
+    0
+    };
+    return rv;
+  }
+
+  std::array<std::uint8_t, 10> Prefetch(long int TargetSector, unsigned int NbSectors) {
+    std::array<std::uint8_t, 10> rv = {
+    0x34,    // PREFETCH
+    0,
+    uint8_t((TargetSector>>24)&0xFF), // target sector
+    uint8_t((TargetSector>>16)&0xFF),
+    uint8_t((TargetSector>>8)&0xFF),
+    uint8_t((TargetSector)&0xFF),
+    0,
+    uint8_t((NbSectors>>8)&0xFF),     // size
+    uint8_t((NbSectors)&0xFF),
+    0
+    };
+    return rv;
+  }
+
+  std::array<std::uint8_t, 6> Inquiry(std::uint8_t AllocationLength) {
+    std::array<std::uint8_t, 6> rv = { 0x12, 0, 0, 0, AllocationLength, 0 };
+    return rv;
+  }
+
+  std::array<std::uint8_t, 12> SetCDSpeed(unsigned char ReadSpeedX, unsigned char WriteSpeedX) {
+    unsigned int ReadSpeedkB  = (ReadSpeedX  * 176) + 2;  // 1x CD = 176kB/s
+    unsigned int WriteSpeedkB = (WriteSpeedX * 176);
+    std::array<std::uint8_t, 12> rv = {
+    0xBB,    // SET CD SPEED
+    0,
+    (ReadSpeedX == 0) ? 0xFF : (ReadSpeedkB>>8)&0xFF,
+    (ReadSpeedX == 0) ? 0xFF : ReadSpeedkB&0xFF,
+    (WriteSpeedkB>>8)&0xFF,
+     WriteSpeedkB&0xFF,
+    0, 0, 0, 0, 0, 0
+    };
+    return rv;
+  }
+}
+
+template<std::size_t CDBLength>
+static void InitSPTDStructureForREAD(unsigned int NbSectors, const std::array<std::uint8_t, CDBLength> &cdb) {
+  // fill in sptd structure
+  sptd.Length             = sizeof(sptd);
+  sptd.PathId             = 0;                  // SCSI card ID will be filled in automatically
+  sptd.TargetId           = 0;                  // SCSI target ID will also be filled in
+  sptd.Lun                = 0;                  // SCSI lun ID will also be filled in
+  sptd.CdbLength          = CDBLength;          // CDB size
+  sptd.SenseInfoLength    = 0;                  // Don't return any sense data
+  sptd.DataIn             = SCSI_IOCTL_DATA_IN; // There will be data from drive
+  sptd.DataTransferLength = 2448 * NbSectors;   // Size of data
+  sptd.TimeOutValue       = 60;                 // SCSI timeout value
+  sptd.DataBuffer         = (PVOID)(DataBuf);
+  sptd.SenseInfoOffset    = 0;
+  std::copy(std::begin(cdb), std::end(cdb), sptd.Cdb);
 }
 
 //--------------------------------------------------------------------------------------------------------
@@ -154,20 +356,7 @@ static bool Read_A8h(char DriveLetter, long int TargetSector, int NbSectors, boo
     bool retval;
     DWORD dwBytesReturned;
 
-    InitSPTDStructureForREAD(12, NbSectors);
-
-    // build CDB
-    ClearCDB();
-    sptd.Cdb[0]  = 0xA8;
-    sptd.Cdb[1]  = (FUAbit << 3);
-    sptd.Cdb[2]  = uint8_t((TargetSector>>24)&0xFF); // msb
-    sptd.Cdb[3]  = uint8_t((TargetSector>>16)&0xFF);
-    sptd.Cdb[4]  = uint8_t((TargetSector>>8)&0xFF);
-    sptd.Cdb[5]  = uint8_t((TargetSector)&0xFF);     // lsb
-    sptd.Cdb[6]  = uint8_t((NbSectors>>24)&0xFF);    // msb
-    sptd.Cdb[7]  = uint8_t((NbSectors>>16)&0xFF);
-    sptd.Cdb[8]  = uint8_t((NbSectors>>8)&0xFF);
-    sptd.Cdb[9]  = uint8_t((NbSectors)&0xFF);        // lsb
+    InitSPTDStructureForREAD(NbSectors, Command::Read_A8h(TargetSector, NbSectors, FUAbit));
 
     // send command
     MP_QueryPerformanceCounter(&PerfCountStart);
@@ -183,18 +372,7 @@ static bool Read_28h(char DriveLetter, long int TargetSector, int NbSectors, boo
     bool retval;
     DWORD dwBytesReturned;
 
-    InitSPTDStructureForREAD(10, NbSectors);
-
-    // build CDB
-    ClearCDB();
-    sptd.Cdb[0]  = 0x28;
-    sptd.Cdb[1]  = (FUAbit << 3);
-    sptd.Cdb[2]  = uint8_t((TargetSector>>24)&0xFF); // msb
-    sptd.Cdb[3]  = uint8_t((TargetSector>>16)&0xFF);
-    sptd.Cdb[4]  = uint8_t((TargetSector>>8)&0xFF);
-    sptd.Cdb[5]  = uint8_t((TargetSector)&0xFF);     // lsb
-    sptd.Cdb[7]  = uint8_t((NbSectors>>8)&0xFF);     // msb
-    sptd.Cdb[8]  = uint8_t((NbSectors)&0xFF);        // lsb
+    InitSPTDStructureForREAD(NbSectors, Command::Read_28h(TargetSector, NbSectors, FUAbit));
 
     // send command
     MP_QueryPerformanceCounter(&PerfCountStart);
@@ -210,21 +388,7 @@ static bool Read_BEh(char DriveLetter, long int TargetSector, int NbSectors, boo
     bool retval;
     DWORD dwBytesReturned;
 
-    InitSPTDStructureForREAD(12, NbSectors);
-
-    // build CDB
-    ClearCDB();
-    sptd.Cdb[0]  = 0xBE;
-    sptd.Cdb[1]  = 0x00;                          // 0x04 = audio data only, 0x00 = any type
-    sptd.Cdb[2]  = uint8_t((TargetSector>>24)&0xFF); // address
-    sptd.Cdb[3]  = uint8_t((TargetSector>>16)&0xFF);
-    sptd.Cdb[4]  = uint8_t((TargetSector>>8)&0xFF);
-    sptd.Cdb[5]  = uint8_t((TargetSector)&0xFF);
-    sptd.Cdb[6]  = uint8_t((NbSectors>>16)&0xFF);    // size
-    sptd.Cdb[7]  = uint8_t((NbSectors>>8)&0xFF);
-    sptd.Cdb[8]  = uint8_t((NbSectors)&0xFF);
-    sptd.Cdb[9]  = 0x10;                          // just data
-    sptd.Cdb[10] = 0;                             // no subcode
+    InitSPTDStructureForREAD(NbSectors, Command::Read_BEh(TargetSector, NbSectors));
 
     // send command
     MP_QueryPerformanceCounter(&PerfCountStart);
@@ -240,19 +404,7 @@ static bool Read_D4h(char DriveLetter, long int TargetSector, int NbSectors, boo
     bool retval;
     DWORD dwBytesReturned;
 
-    InitSPTDStructureForREAD(10, NbSectors);
-
-    // build CDB
-    ClearCDB();
-    sptd.Cdb[0]  = 0xD4;
-    sptd.Cdb[1]  = (FUAbit << 3);
-    sptd.Cdb[2]  = uint8_t((TargetSector>>24)&0xFF); // msb
-    sptd.Cdb[3]  = uint8_t((TargetSector>>16)&0xFF);
-    sptd.Cdb[4]  = uint8_t((TargetSector>>8)&0xFF);
-    sptd.Cdb[5]  = uint8_t((TargetSector)&0xFF);     // lsb
-    sptd.Cdb[6]  = uint8_t((NbSectors>>16)&0xFF);
-    sptd.Cdb[7]  = uint8_t((NbSectors>>8)&0xFF);
-    sptd.Cdb[8]  = uint8_t((NbSectors)&0xFF);        // lsb
+    InitSPTDStructureForREAD(NbSectors, Command::Read_D4h(TargetSector, NbSectors, FUAbit));
 
     // send command
     MP_QueryPerformanceCounter(&PerfCountStart);
@@ -268,19 +420,7 @@ static bool Read_D5h(char DriveLetter, long int TargetSector, int NbSectors, boo
     bool retval;
     DWORD dwBytesReturned;
 
-    InitSPTDStructureForREAD(10, NbSectors);
-
-    // build CDB
-    ClearCDB();
-    sptd.Cdb[0]  = 0xD5;
-    sptd.Cdb[1]  = (FUAbit << 3);
-    sptd.Cdb[2]  = uint8_t((TargetSector>>24)&0xFF); // msb
-    sptd.Cdb[3]  = uint8_t((TargetSector>>16)&0xFF);
-    sptd.Cdb[4]  = uint8_t((TargetSector>>8)&0xFF);
-    sptd.Cdb[5]  = uint8_t((TargetSector)&0xFF);     // lsb
-    sptd.Cdb[6]  = uint8_t((NbSectors>>16)&0xFF);
-    sptd.Cdb[7]  = uint8_t((NbSectors>>8)&0xFF);
-    sptd.Cdb[8]  = uint8_t((NbSectors)&0xFF);        // lsb
+    InitSPTDStructureForREAD(NbSectors, Command::Read_D5h(TargetSector, NbSectors, FUAbit));
 
     // send command
     MP_QueryPerformanceCounter(&PerfCountStart);
@@ -297,20 +437,7 @@ static bool Read_D8h(char DriveLetter, long int TargetSector, int NbSectors, boo
     bool retval;
     DWORD dwBytesReturned;
 
-    InitSPTDStructureForREAD(12, NbSectors);
-
-    // build CDB
-    ClearCDB();
-    sptd.Cdb[0]  = 0xD8;
-    sptd.Cdb[1]  = (FUAbit << 3);
-    sptd.Cdb[2]  = uint8_t((TargetSector>>24)&0xFF); // msb
-    sptd.Cdb[3]  = uint8_t((TargetSector>>16)&0xFF);
-    sptd.Cdb[4]  = uint8_t((TargetSector>>8)&0xFF);
-    sptd.Cdb[5]  = uint8_t((TargetSector)&0xFF);     // lsb
-    sptd.Cdb[6]  = uint8_t((NbSectors>>24)&0xFF);    // msb
-    sptd.Cdb[7]  = uint8_t((NbSectors>>16)&0xFF);
-    sptd.Cdb[8]  = uint8_t((NbSectors>>8)&0xFF);
-    sptd.Cdb[9]  = uint8_t((NbSectors)&0xFF);        // lsb
+    InitSPTDStructureForREAD(NbSectors, Command::Read_D8h(TargetSector, NbSectors, FUAbit));
 
     // send command
     MP_QueryPerformanceCounter(&PerfCountStart);
@@ -352,20 +479,7 @@ static bool PlextorFUAFlush(char DriveLetter, long int TargetSector)
     bool retval;
     DWORD dwBytesReturned;
 
-    InitSPTDStructureForREAD(12, 0);
-
-    // build CDB
-    ClearCDB();
-    sptd.Cdb[0]  = 0x28;       // READ(10) command
-    sptd.Cdb[1]  = 0x08;       // FUA
-    sptd.Cdb[2]  = uint8_t((TargetSector>>24)&0xFF); // msb
-    sptd.Cdb[3]  = uint8_t((TargetSector>>16)&0xFF);
-    sptd.Cdb[4]  = uint8_t((TargetSector>>8)&0xFF);
-    sptd.Cdb[5]  = uint8_t((TargetSector)&0xFF);     // lsb
-    // size stays zero, that's how this command works
-    // MMC spec specifies that "A Transfer Length of zero indicates that no
-    // logical blocks shall be transferred. This condition shall not be
-    // considered an error"
+    InitSPTDStructureForREAD(0, Command::PlextorFUAFlush(TargetSector));
 
     // send command
     MP_QueryPerformanceCounter(&PerfCountStart);
@@ -379,15 +493,11 @@ static bool RequestSense(char DriveLetter)
 {
     bool retval;
     DWORD dwBytesReturned;
+    const std::uint8_t AllocationLength = 18;
 
     // fill in sptd structure
-    InitSPTDStructureForREAD(6,0);   // command is 5 bytes long, we set the buffer size at next line
-    sptd.DataTransferLength = 18;    // Size of data
-
-    // build CDB
-    ClearCDB();
-    sptd.Cdb[0]  = 3;    // REQUEST SENSE
-    sptd.Cdb[4]  = 18;   // allocation size
+    InitSPTDStructureForREAD(0, Command::RequestSense(AllocationLength));   // command is 5 bytes long, we set the buffer size at next line
+    sptd.DataTransferLength = AllocationLength;    // Size of data
 
     // send command
     retval = DeviceIoControl(hVolume,IOCTL_SCSI_PASS_THROUGH_DIRECT,(PVOID)&sptd,
@@ -401,16 +511,8 @@ static bool ModeSense(char DriveLetter, unsigned char PageCode, unsigned char Su
     DWORD dwBytesReturned;
 
     // fill in sptd structure
-    InitSPTDStructureForREAD(10,0);    // command is 10 bytes long, we set the buffer size at next line
+    InitSPTDStructureForREAD(0, Command::ModeSense(PageCode, SubPageCode, size));    // command is 10 bytes long, we set the buffer size at next line
     sptd.DataTransferLength = size;    // Size of data
-
-    // build CDB
-    ClearCDB();
-    sptd.Cdb[0]  = 0x5A;                     // MODE SENSE(10)
-    sptd.Cdb[2]  = PageCode;
-    sptd.Cdb[3]  = SubPageCode;
-    sptd.Cdb[7]  = uint8_t((size>>8)&0xFF);     // size
-    sptd.Cdb[8]  = uint8_t((size)&0xFF);
 
     // send command
     retval = DeviceIoControl(hVolume,IOCTL_SCSI_PASS_THROUGH_DIRECT,(PVOID)&sptd,
@@ -426,16 +528,8 @@ static bool ModeSelect(char DriveLetter, unsigned char PageCode, unsigned char S
     DWORD dwBytesReturned;
 
     // fill in sptd structure
-    InitSPTDStructureForREAD(10,0);    // command is 10 bytes long, we set the buffer size at next line
+    InitSPTDStructureForREAD(0, Command::ModeSelect(PageCode, SubPageCode, size));    // command is 10 bytes long, we set the buffer size at next line
     sptd.DataTransferLength = size;    // Size of data
-
-    // build CDB
-    ClearCDB();
-    sptd.Cdb[0]  = 0x55;                     // MODE SENSE(10)
-    sptd.Cdb[2]  = PageCode;
-    sptd.Cdb[3]  = SubPageCode;
-    sptd.Cdb[7]  = uint8_t((size>>8)&0xFF);     // size
-    sptd.Cdb[8]  = uint8_t((size)&0xFF);
 
     // send command
     retval = DeviceIoControl(hVolume,IOCTL_SCSI_PASS_THROUGH_DIRECT,(PVOID)&sptd,
@@ -449,18 +543,8 @@ static bool Prefetch(char DriveLetter, long int TargetSector, unsigned int NbSec
     DWORD dwBytesReturned;
 
     // fill in sptd structure
-    InitSPTDStructureForREAD(10,0);   // command is 10 bytes long, we set the buffer size at next line
+    InitSPTDStructureForREAD(0, Command::Prefetch(TargetSector, NbSectors));   // command is 10 bytes long, we set the buffer size at next line
     sptd.DataTransferLength = 18;     // Size of data
-
-    // build CDB
-    ClearCDB();
-    sptd.Cdb[0]  = 0x34;    // PREFETCH
-    sptd.Cdb[2]  = uint8_t((TargetSector>>24)&0xFF); // target sector
-    sptd.Cdb[3]  = uint8_t((TargetSector>>16)&0xFF);
-    sptd.Cdb[4]  = uint8_t((TargetSector>>8)&0xFF);
-    sptd.Cdb[5]  = uint8_t((TargetSector)&0xFF);
-    sptd.Cdb[7]  = uint8_t((NbSectors>>8)&0xFF);     // size
-    sptd.Cdb[8]  = uint8_t((NbSectors)&0xFF);
 
     // send command
     retval = DeviceIoControl(hVolume,IOCTL_SCSI_PASS_THROUGH_DIRECT,(PVOID)&sptd,
@@ -539,13 +623,9 @@ static bool PrintDriveInfo(char DriveLetter)
     DWORD dwBytesReturned;
 
     // fill in sptd structure
-    InitSPTDStructureForREAD(6,0);    // INQUIRY command is 6 bytes long
-    sptd.DataTransferLength = 36;     // Size of data
-
-    // build CDB
-    ClearCDB();
-    sptd.Cdb[0]  = 0x12;    // INQUIRY
-    sptd.Cdb[4]  = 36;      // allocated size
+    const std::uint8_t AllocationLength = 36;
+    InitSPTDStructureForREAD(0, Command::Inquiry(AllocationLength));    // INQUIRY command is 6 bytes long
+    sptd.DataTransferLength = AllocationLength;     // Size of data
 
     // send command
     retval = DeviceIoControl(hVolume,IOCTL_SCSI_PASS_THROUGH_DIRECT,(PVOID)&sptd,
@@ -614,22 +694,12 @@ static bool SpinDrive(char DriveLetter, unsigned int Seconds)
 static bool SetDriveSpeed(char DriveLetter, unsigned char ReadSpeedX, unsigned char WriteSpeedX)
 {
     bool retval = false;
-    unsigned int ReadSpeedkB  = (ReadSpeedX  * 176) + 2;  // 1x CD = 176kB/s
-    unsigned int WriteSpeedkB = (WriteSpeedX * 176);
 
     DWORD dwBytesReturned;
 
     // fill in sptd structure
-    InitSPTDStructureForREAD(12,0);    // command is 12 bytes long, we set the buffer size at next line
+    InitSPTDStructureForREAD(0, Command::SetCDSpeed(ReadSpeedX, WriteSpeedX));    // command is 12 bytes long, we set the buffer size at next line
     sptd.DataTransferLength = 18;      // Size of data
-
-    // build CDB
-    ClearCDB();
-    sptd.Cdb[0]  = 0xBB;    // SET CD SPEED
-    sptd.Cdb[2]  = (ReadSpeedX == 0) ? 0xFF : (ReadSpeedkB>>8)&0xFF;
-    sptd.Cdb[3]  = (ReadSpeedX == 0) ? 0xFF : ReadSpeedkB&0xFF;
-    sptd.Cdb[4]  = (WriteSpeedkB>>8)&0xFF;
-    sptd.Cdb[5]  =  WriteSpeedkB&0xFF;
 
     // send command
     retval = DeviceIoControl(hVolume,IOCTL_SCSI_PASS_THROUGH_DIRECT,(PVOID)&sptd,
