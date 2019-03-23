@@ -89,8 +89,6 @@
 
 // global variables
 static int NbBurstReadSectors = 1;
-static uint8_t SenseBuf[255];
-static LARGE_INTEGER freq = {0};
 static double Delay = 0, Delay2 = 0, InitDelay = 0;
 static double AverageDelay = 0;
 static int NbMeasures = 0;
@@ -329,6 +327,13 @@ struct CommandResult {
   std::vector<std::uint8_t> Data;
 };
 
+static LARGE_INTEGER init_qpc_freq() {
+    LARGE_INTEGER freq;
+    QueryPerformanceFrequency(&freq);
+    freq.QuadPart /= 1000;
+    return freq;
+}
+
 template<std::size_t CDBLength>
 static void ExecCommand(CommandResult& rv, const std::array<std::uint8_t, CDBLength> &cdb) {
   SCSI_PASS_THROUGH_DIRECT sptd;
@@ -346,6 +351,7 @@ static void ExecCommand(CommandResult& rv, const std::array<std::uint8_t, CDBLen
   std::copy(std::begin(cdb), std::end(cdb), sptd.Cdb);
 
   LARGE_INTEGER PerfCountStart, PerfCountEnd;
+  static const LARGE_INTEGER freq = init_qpc_freq();
   DWORD dwBytesReturned;
 
   MP_QueryPerformanceCounter(&PerfCountStart);
@@ -1487,8 +1493,6 @@ int main(int argc, char **argv)
 
     // --------------- setup ---------------------------
     printf("\nCacheExplorer 0.9 - spath@cdfreaks.com\n");
-    QueryPerformanceFrequency(&freq);
-    freq.QuadPart /= 1000;
 
     // ------------ command line parsing --------------
     if (argc < 2)
