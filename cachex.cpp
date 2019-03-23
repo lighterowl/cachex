@@ -11,6 +11,8 @@
 #include <cstdio>
 
 #include <array>
+#include <vector>
+#include <algorithm>
 
 //#define RELEASE_VERSION
 #undef RELEASE_VERSION
@@ -1180,18 +1182,11 @@ static int TestCacheLineSize_Stat(char DriveLetter, unsigned char ReadCommand, l
     int NbPeakMeasures;
     double Maxdelay = 0.0;
     double Threshold = 0.0;
-    double* Measures = NULL;
+    std::vector<double> Measures;
+    Measures.reserve(NbMeasures);
     int CurrentDelta = 0;
     int MostFrequentDeltaIndex = 0;
     int MaxDeltaFrequency = 0;
-
-    Measures = (double*)malloc(NbMeasures * sizeof(double));
-
-    if (Measures == NULL)
-    {
-        printf("\nError: could not allocate measures buffer");
-        return(-1);
-    }
 
     // init
     for (i = 0; i < NBPEAKMEASURES; i++)
@@ -1208,21 +1203,17 @@ static int TestCacheLineSize_Stat(char DriveLetter, unsigned char ReadCommand, l
     // initial read.
     ClearCache(DriveLetter);
     Commands[ReadCommand].pFunc(DriveLetter, TargetSector, BurstSize, false);
-    Measures[0] = ((double)PerfCountEnd.QuadPart - (double)PerfCountStart.QuadPart) / (double)freq.QuadPart;
+    Measures.push_back(((double)PerfCountEnd.QuadPart - (double)PerfCountStart.QuadPart) / (double)freq.QuadPart);
 
     // fill in measures buffer
     for (i=1; i<NbMeasures; i++)
     {
         Commands[ReadCommand].pFunc(DriveLetter, TargetSector + i*BurstSize, BurstSize, false);
-        Measures[i] = ((double)PerfCountEnd.QuadPart - (double)PerfCountStart.QuadPart) / (double)freq.QuadPart;
+        Measures.push_back(((double)PerfCountEnd.QuadPart - (double)PerfCountStart.QuadPart) / (double)freq.QuadPart);
     }
 
     // find max time
-    Maxdelay = 0;
-    for (i=1; i<NbMeasures; i++)
-    {
-        if ( Measures[i] > Maxdelay) Maxdelay = Measures[i];
-    }
+    Maxdelay = *(std::max_element(std::begin(Measures), std::end(Measures)));
     DEBUG("\ninitial: %.2f ms, max: %.2f ms",Measures[0], Maxdelay);
 
     // find all values above 90% of max
@@ -1725,12 +1716,8 @@ int main(int argc, char **argv)
     }
 
     // ------------ actual stuff --------------
-    DataBuf = (uint8_t *)malloc(NbBurstReadSectors * 2448 * sizeof(uint8_t));
-    if (DataBuf == NULL)
-    {
-        printf("\nError: cannot allocate memory");
-        return(-1);
-    }
+    std::vector<std::uint8_t> data_buf(NbBurstReadSectors * 2448);
+    DataBuf = data_buf.data();
 
     //
     // print drive info
