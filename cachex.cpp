@@ -150,227 +150,173 @@ static void InitSPTDStructureForREAD(unsigned char CDBLength, unsigned int NbSec
 static BOOL Read_A8h(char DriveLetter, long int TargetSector, int NbSectors, bool FUAbit)
 {
     BOOL retval;
+    DWORD dwBytesReturned;
 
-    if (hVolume != INVALID_HANDLE_VALUE)
-    {
-        DWORD dwBytesReturned;
+    InitSPTDStructureForREAD(12, NbSectors);
 
-        InitSPTDStructureForREAD(12, NbSectors);
+    // build CDB
+    ClearCDB();
+    sptd.Cdb[0]  = 0xA8;
+    sptd.Cdb[1]  = (FUAbit << 3);
+    sptd.Cdb[2]  = byte((TargetSector>>24)&0xFF); // msb
+    sptd.Cdb[3]  = byte((TargetSector>>16)&0xFF);
+    sptd.Cdb[4]  = byte((TargetSector>>8)&0xFF);
+    sptd.Cdb[5]  = byte((TargetSector)&0xFF);     // lsb
+    sptd.Cdb[6]  = byte((NbSectors>>24)&0xFF);    // msb
+    sptd.Cdb[7]  = byte((NbSectors>>16)&0xFF);
+    sptd.Cdb[8]  = byte((NbSectors>>8)&0xFF);
+    sptd.Cdb[9]  = byte((NbSectors)&0xFF);        // lsb
 
-        // build CDB
-        ClearCDB();
-        sptd.Cdb[0]  = 0xA8;
-        sptd.Cdb[1]  = (FUAbit << 3);
-        sptd.Cdb[2]  = byte((TargetSector>>24)&0xFF); // msb
-        sptd.Cdb[3]  = byte((TargetSector>>16)&0xFF);
-        sptd.Cdb[4]  = byte((TargetSector>>8)&0xFF);
-        sptd.Cdb[5]  = byte((TargetSector)&0xFF);     // lsb
-        sptd.Cdb[6]  = byte((NbSectors>>24)&0xFF);    // msb
-        sptd.Cdb[7]  = byte((NbSectors>>16)&0xFF);
-        sptd.Cdb[8]  = byte((NbSectors>>8)&0xFF);
-        sptd.Cdb[9]  = byte((NbSectors)&0xFF);        // lsb
+    // send command
+    MP_QueryPerformanceCounter(&PerfCountStart);
+    retval = DeviceIoControl(hVolume,IOCTL_SCSI_PASS_THROUGH_DIRECT,(PVOID)&sptd,
+                             (DWORD)sizeof(SCSI_PASS_THROUGH_DIRECT), NULL, 0, &dwBytesReturned,NULL);
+    MP_QueryPerformanceCounter(&PerfCountEnd);
 
-        // send command
-        MP_QueryPerformanceCounter(&PerfCountStart);
-        retval = DeviceIoControl(hVolume,IOCTL_SCSI_PASS_THROUGH_DIRECT,(PVOID)&sptd,
-                                 (DWORD)sizeof(SCSI_PASS_THROUGH_DIRECT), NULL, 0, &dwBytesReturned,NULL);
-        MP_QueryPerformanceCounter(&PerfCountEnd);
-
-        return retval;
-    }
-    else
-    {
-        printf("\nError: invalid handle");
-        return FALSE;
-    }
+    return retval;
 }
 
 static BOOL Read_28h(char DriveLetter, long int TargetSector, int NbSectors, bool FUAbit)
 {
     BOOL retval;
+    DWORD dwBytesReturned;
 
-    if (hVolume != INVALID_HANDLE_VALUE)
-    {
-        DWORD dwBytesReturned;
+    InitSPTDStructureForREAD(10, NbSectors);
 
-        InitSPTDStructureForREAD(10, NbSectors);
+    // build CDB
+    ClearCDB();
+    sptd.Cdb[0]  = 0x28;
+    sptd.Cdb[1]  = (FUAbit << 3);
+    sptd.Cdb[2]  = byte((TargetSector>>24)&0xFF); // msb
+    sptd.Cdb[3]  = byte((TargetSector>>16)&0xFF);
+    sptd.Cdb[4]  = byte((TargetSector>>8)&0xFF);
+    sptd.Cdb[5]  = byte((TargetSector)&0xFF);     // lsb
+    sptd.Cdb[7]  = byte((NbSectors>>8)&0xFF);     // msb
+    sptd.Cdb[8]  = byte((NbSectors)&0xFF);        // lsb
 
-        // build CDB
-        ClearCDB();
-        sptd.Cdb[0]  = 0x28;
-        sptd.Cdb[1]  = (FUAbit << 3);
-        sptd.Cdb[2]  = byte((TargetSector>>24)&0xFF); // msb
-        sptd.Cdb[3]  = byte((TargetSector>>16)&0xFF);
-        sptd.Cdb[4]  = byte((TargetSector>>8)&0xFF);
-        sptd.Cdb[5]  = byte((TargetSector)&0xFF);     // lsb
-        sptd.Cdb[7]  = byte((NbSectors>>8)&0xFF);     // msb
-        sptd.Cdb[8]  = byte((NbSectors)&0xFF);        // lsb
+    // send command
+    MP_QueryPerformanceCounter(&PerfCountStart);
+    retval = DeviceIoControl(hVolume,IOCTL_SCSI_PASS_THROUGH_DIRECT,(PVOID)&sptd,
+                             (DWORD)sizeof(SCSI_PASS_THROUGH_DIRECT), NULL, 0, &dwBytesReturned,NULL);
+    MP_QueryPerformanceCounter(&PerfCountEnd);
 
-        // send command
-        MP_QueryPerformanceCounter(&PerfCountStart);
-        retval = DeviceIoControl(hVolume,IOCTL_SCSI_PASS_THROUGH_DIRECT,(PVOID)&sptd,
-                                 (DWORD)sizeof(SCSI_PASS_THROUGH_DIRECT), NULL, 0, &dwBytesReturned,NULL);
-        MP_QueryPerformanceCounter(&PerfCountEnd);
-
-        return retval;
-    }
-    else
-    {
-        printf("\nError: invalid handle");
-        return FALSE;
-    }
+    return retval;
 }
 
 static BOOL Read_BEh(char DriveLetter, long int TargetSector, int NbSectors, bool FUAbit)
 {
     BOOL retval;
+    DWORD dwBytesReturned;
 
-    if (hVolume != INVALID_HANDLE_VALUE)
-    {
-        DWORD dwBytesReturned;
+    InitSPTDStructureForREAD(12, NbSectors);
 
-        InitSPTDStructureForREAD(12, NbSectors);
+    // build CDB
+    ClearCDB();
+    sptd.Cdb[0]  = 0xBE;
+    sptd.Cdb[1]  = 0x00;                          // 0x04 = audio data only, 0x00 = any type
+    sptd.Cdb[2]  = byte((TargetSector>>24)&0xFF); // address
+    sptd.Cdb[3]  = byte((TargetSector>>16)&0xFF);
+    sptd.Cdb[4]  = byte((TargetSector>>8)&0xFF);
+    sptd.Cdb[5]  = byte((TargetSector)&0xFF);
+    sptd.Cdb[6]  = byte((NbSectors>>16)&0xFF);    // size
+    sptd.Cdb[7]  = byte((NbSectors>>8)&0xFF);
+    sptd.Cdb[8]  = byte((NbSectors)&0xFF);
+    sptd.Cdb[9]  = 0x10;                          // just data
+    sptd.Cdb[10] = 0;                             // no subcode
 
-        // build CDB
-        ClearCDB();
-        sptd.Cdb[0]  = 0xBE;
-        sptd.Cdb[1]  = 0x00;                          // 0x04 = audio data only, 0x00 = any type
-        sptd.Cdb[2]  = byte((TargetSector>>24)&0xFF); // address
-        sptd.Cdb[3]  = byte((TargetSector>>16)&0xFF);
-        sptd.Cdb[4]  = byte((TargetSector>>8)&0xFF);
-        sptd.Cdb[5]  = byte((TargetSector)&0xFF);
-        sptd.Cdb[6]  = byte((NbSectors>>16)&0xFF);    // size
-        sptd.Cdb[7]  = byte((NbSectors>>8)&0xFF);
-        sptd.Cdb[8]  = byte((NbSectors)&0xFF);
-        sptd.Cdb[9]  = 0x10;                          // just data
-        sptd.Cdb[10] = 0;                             // no subcode
+    // send command
+    MP_QueryPerformanceCounter(&PerfCountStart);
+    retval = DeviceIoControl(hVolume,IOCTL_SCSI_PASS_THROUGH_DIRECT,(PVOID)&sptd,
+                             (DWORD)sizeof(SCSI_PASS_THROUGH_DIRECT), NULL, 0, &dwBytesReturned,NULL);
+    MP_QueryPerformanceCounter(&PerfCountEnd);
 
-        // send command
-        MP_QueryPerformanceCounter(&PerfCountStart);
-        retval = DeviceIoControl(hVolume,IOCTL_SCSI_PASS_THROUGH_DIRECT,(PVOID)&sptd,
-                                 (DWORD)sizeof(SCSI_PASS_THROUGH_DIRECT), NULL, 0, &dwBytesReturned,NULL);
-        MP_QueryPerformanceCounter(&PerfCountEnd);
-
-        return retval;
-    }
-    else
-    {
-        printf("\nError: invalid handle");
-        return FALSE;
-    }
+    return retval;
 }
 
 static BOOL Read_D4h(char DriveLetter, long int TargetSector, int NbSectors, bool FUAbit)
 {
     BOOL retval;
+    DWORD dwBytesReturned;
 
-    if (hVolume != INVALID_HANDLE_VALUE)
-    {
-        DWORD dwBytesReturned;
+    InitSPTDStructureForREAD(10, NbSectors);
 
-        InitSPTDStructureForREAD(10, NbSectors);
+    // build CDB
+    ClearCDB();
+    sptd.Cdb[0]  = 0xD4;
+    sptd.Cdb[1]  = (FUAbit << 3);
+    sptd.Cdb[2]  = byte((TargetSector>>24)&0xFF); // msb
+    sptd.Cdb[3]  = byte((TargetSector>>16)&0xFF);
+    sptd.Cdb[4]  = byte((TargetSector>>8)&0xFF);
+    sptd.Cdb[5]  = byte((TargetSector)&0xFF);     // lsb
+    sptd.Cdb[6]  = byte((NbSectors>>16)&0xFF);
+    sptd.Cdb[7]  = byte((NbSectors>>8)&0xFF);
+    sptd.Cdb[8]  = byte((NbSectors)&0xFF);        // lsb
 
-        // build CDB
-        ClearCDB();
-        sptd.Cdb[0]  = 0xD4;
-        sptd.Cdb[1]  = (FUAbit << 3);
-        sptd.Cdb[2]  = byte((TargetSector>>24)&0xFF); // msb
-        sptd.Cdb[3]  = byte((TargetSector>>16)&0xFF);
-        sptd.Cdb[4]  = byte((TargetSector>>8)&0xFF);
-        sptd.Cdb[5]  = byte((TargetSector)&0xFF);     // lsb
-        sptd.Cdb[6]  = byte((NbSectors>>16)&0xFF);
-        sptd.Cdb[7]  = byte((NbSectors>>8)&0xFF);
-        sptd.Cdb[8]  = byte((NbSectors)&0xFF);        // lsb
+    // send command
+    MP_QueryPerformanceCounter(&PerfCountStart);
+    retval = DeviceIoControl(hVolume,IOCTL_SCSI_PASS_THROUGH_DIRECT,(PVOID)&sptd,
+                             (DWORD)sizeof(SCSI_PASS_THROUGH_DIRECT), NULL, 0, &dwBytesReturned,NULL);
+    MP_QueryPerformanceCounter(&PerfCountEnd);
 
-        // send command
-        MP_QueryPerformanceCounter(&PerfCountStart);
-        retval = DeviceIoControl(hVolume,IOCTL_SCSI_PASS_THROUGH_DIRECT,(PVOID)&sptd,
-                                 (DWORD)sizeof(SCSI_PASS_THROUGH_DIRECT), NULL, 0, &dwBytesReturned,NULL);
-        MP_QueryPerformanceCounter(&PerfCountEnd);
-
-        return retval;
-    }
-    else
-    {
-        printf("\nError: invalid handle");
-        return FALSE;
-    }
+    return retval;
 }
 
 static BOOL Read_D5h(char DriveLetter, long int TargetSector, int NbSectors, bool FUAbit)
 {
     BOOL retval;
+    DWORD dwBytesReturned;
 
-    if (hVolume != INVALID_HANDLE_VALUE)
-    {
-        DWORD dwBytesReturned;
+    InitSPTDStructureForREAD(10, NbSectors);
 
-        InitSPTDStructureForREAD(10, NbSectors);
+    // build CDB
+    ClearCDB();
+    sptd.Cdb[0]  = 0xD5;
+    sptd.Cdb[1]  = (FUAbit << 3);
+    sptd.Cdb[2]  = byte((TargetSector>>24)&0xFF); // msb
+    sptd.Cdb[3]  = byte((TargetSector>>16)&0xFF);
+    sptd.Cdb[4]  = byte((TargetSector>>8)&0xFF);
+    sptd.Cdb[5]  = byte((TargetSector)&0xFF);     // lsb
+    sptd.Cdb[6]  = byte((NbSectors>>16)&0xFF);
+    sptd.Cdb[7]  = byte((NbSectors>>8)&0xFF);
+    sptd.Cdb[8]  = byte((NbSectors)&0xFF);        // lsb
 
-        // build CDB
-        ClearCDB();
-        sptd.Cdb[0]  = 0xD5;
-        sptd.Cdb[1]  = (FUAbit << 3);
-        sptd.Cdb[2]  = byte((TargetSector>>24)&0xFF); // msb
-        sptd.Cdb[3]  = byte((TargetSector>>16)&0xFF);
-        sptd.Cdb[4]  = byte((TargetSector>>8)&0xFF);
-        sptd.Cdb[5]  = byte((TargetSector)&0xFF);     // lsb
-        sptd.Cdb[6]  = byte((NbSectors>>16)&0xFF);
-        sptd.Cdb[7]  = byte((NbSectors>>8)&0xFF);
-        sptd.Cdb[8]  = byte((NbSectors)&0xFF);        // lsb
+    // send command
+    MP_QueryPerformanceCounter(&PerfCountStart);
+    retval = DeviceIoControl(hVolume,IOCTL_SCSI_PASS_THROUGH_DIRECT,(PVOID)&sptd,
+                             (DWORD)sizeof(SCSI_PASS_THROUGH_DIRECT), NULL, 0, &dwBytesReturned,NULL);
+    MP_QueryPerformanceCounter(&PerfCountEnd);
 
-        // send command
-        MP_QueryPerformanceCounter(&PerfCountStart);
-        retval = DeviceIoControl(hVolume,IOCTL_SCSI_PASS_THROUGH_DIRECT,(PVOID)&sptd,
-                                 (DWORD)sizeof(SCSI_PASS_THROUGH_DIRECT), NULL, 0, &dwBytesReturned,NULL);
-        MP_QueryPerformanceCounter(&PerfCountEnd);
-
-        return retval;
-    }
-    else
-    {
-        printf("\nError: invalid handle");
-        return FALSE;
-    }
+    return retval;
 }
 
 
 static BOOL Read_D8h(char DriveLetter, long int TargetSector, int NbSectors, bool FUAbit)
 {
     BOOL retval;
+    DWORD dwBytesReturned;
 
-    if (hVolume != INVALID_HANDLE_VALUE)
-    {
-        DWORD dwBytesReturned;
+    InitSPTDStructureForREAD(12, NbSectors);
 
-        InitSPTDStructureForREAD(12, NbSectors);
+    // build CDB
+    ClearCDB();
+    sptd.Cdb[0]  = 0xD8;
+    sptd.Cdb[1]  = (FUAbit << 3);
+    sptd.Cdb[2]  = byte((TargetSector>>24)&0xFF); // msb
+    sptd.Cdb[3]  = byte((TargetSector>>16)&0xFF);
+    sptd.Cdb[4]  = byte((TargetSector>>8)&0xFF);
+    sptd.Cdb[5]  = byte((TargetSector)&0xFF);     // lsb
+    sptd.Cdb[6]  = byte((NbSectors>>24)&0xFF);    // msb
+    sptd.Cdb[7]  = byte((NbSectors>>16)&0xFF);
+    sptd.Cdb[8]  = byte((NbSectors>>8)&0xFF);
+    sptd.Cdb[9]  = byte((NbSectors)&0xFF);        // lsb
 
-        // build CDB
-        ClearCDB();
-        sptd.Cdb[0]  = 0xD8;
-        sptd.Cdb[1]  = (FUAbit << 3);
-        sptd.Cdb[2]  = byte((TargetSector>>24)&0xFF); // msb
-        sptd.Cdb[3]  = byte((TargetSector>>16)&0xFF);
-        sptd.Cdb[4]  = byte((TargetSector>>8)&0xFF);
-        sptd.Cdb[5]  = byte((TargetSector)&0xFF);     // lsb
-        sptd.Cdb[6]  = byte((NbSectors>>24)&0xFF);    // msb
-        sptd.Cdb[7]  = byte((NbSectors>>16)&0xFF);
-        sptd.Cdb[8]  = byte((NbSectors>>8)&0xFF);
-        sptd.Cdb[9]  = byte((NbSectors)&0xFF);        // lsb
+    // send command
+    MP_QueryPerformanceCounter(&PerfCountStart);
+    retval = DeviceIoControl(hVolume,IOCTL_SCSI_PASS_THROUGH_DIRECT,(PVOID)&sptd,
+                             (DWORD)sizeof(SCSI_PASS_THROUGH_DIRECT), NULL, 0, &dwBytesReturned,NULL);
+    MP_QueryPerformanceCounter(&PerfCountEnd);
 
-        // send command
-        MP_QueryPerformanceCounter(&PerfCountStart);
-        retval = DeviceIoControl(hVolume,IOCTL_SCSI_PASS_THROUGH_DIRECT,(PVOID)&sptd,
-                                 (DWORD)sizeof(SCSI_PASS_THROUGH_DIRECT), NULL, 0, &dwBytesReturned,NULL);
-        MP_QueryPerformanceCounter(&PerfCountEnd);
-
-        return retval;
-    }
-    else
-    {
-        printf("\nError: invalid handle");
-        return FALSE;
-    }
+    return retval;
 }
 
 // drive characteristics
@@ -402,99 +348,72 @@ static sReadCommand Commands[NB_READ_COMMANDS] = {
 static BOOL PlextorFUAFlush(char DriveLetter, long int TargetSector)
 {
     BOOL retval;
+    DWORD dwBytesReturned;
 
-    if (hVolume != INVALID_HANDLE_VALUE)
-    {
-        DWORD dwBytesReturned;
+    InitSPTDStructureForREAD(12, 0);
 
-        InitSPTDStructureForREAD(12, 0);
+    // build CDB
+    ClearCDB();
+    sptd.Cdb[0]  = 0x28;       // READ(10) command
+    sptd.Cdb[1]  = 0x08;       // FUA
+    sptd.Cdb[2]  = byte((TargetSector>>24)&0xFF); // msb
+    sptd.Cdb[3]  = byte((TargetSector>>16)&0xFF);
+    sptd.Cdb[4]  = byte((TargetSector>>8)&0xFF);
+    sptd.Cdb[5]  = byte((TargetSector)&0xFF);     // lsb
+    // size stays zero, that's how this command works
+    // MMC spec specifies that "A Transfer Length of zero indicates that no
+    // logical blocks shall be transferred. This condition shall not be
+    // considered an error"
 
-        // build CDB
-        ClearCDB();
-        sptd.Cdb[0]  = 0x28;       // READ(10) command
-        sptd.Cdb[1]  = 0x08;       // FUA
-        sptd.Cdb[2]  = byte((TargetSector>>24)&0xFF); // msb
-        sptd.Cdb[3]  = byte((TargetSector>>16)&0xFF);
-        sptd.Cdb[4]  = byte((TargetSector>>8)&0xFF);
-        sptd.Cdb[5]  = byte((TargetSector)&0xFF);     // lsb
-        // size stays zero, that's how this command works
-        // MMC spec specifies that "A Transfer Length of zero indicates that no
-        // logical blocks shall be transferred. This condition shall not be
-        // considered an error"
-
-        // send command
-        MP_QueryPerformanceCounter(&PerfCountStart);
-        retval = DeviceIoControl(hVolume,IOCTL_SCSI_PASS_THROUGH_DIRECT,(PVOID)&sptd,
-                                 (DWORD)sizeof(SCSI_PASS_THROUGH_DIRECT), NULL, 0, &dwBytesReturned,NULL);
-        MP_QueryPerformanceCounter(&PerfCountEnd);
-        return retval;
-    }
-    else
-    {
-        printf("\nError: invalid handle");
-        return FALSE;
-    }
+    // send command
+    MP_QueryPerformanceCounter(&PerfCountStart);
+    retval = DeviceIoControl(hVolume,IOCTL_SCSI_PASS_THROUGH_DIRECT,(PVOID)&sptd,
+                             (DWORD)sizeof(SCSI_PASS_THROUGH_DIRECT), NULL, 0, &dwBytesReturned,NULL);
+    MP_QueryPerformanceCounter(&PerfCountEnd);
+    return retval;
 }
 
 static BOOL RequestSense(char DriveLetter)
 {
     BOOL retval;
+    DWORD dwBytesReturned;
 
-    if (hVolume != INVALID_HANDLE_VALUE)
-    {
-        DWORD dwBytesReturned;
+    // fill in sptd structure
+    InitSPTDStructureForREAD(6,0);   // command is 5 bytes long, we set the buffer size at next line
+    sptd.DataTransferLength = 18;    // Size of data
 
-        // fill in sptd structure
-        InitSPTDStructureForREAD(6,0);   // command is 5 bytes long, we set the buffer size at next line
-        sptd.DataTransferLength = 18;    // Size of data
+    // build CDB
+    ClearCDB();
+    sptd.Cdb[0]  = 3;    // REQUEST SENSE
+    sptd.Cdb[4]  = 18;   // allocation size
 
-        // build CDB
-        ClearCDB();
-        sptd.Cdb[0]  = 3;    // REQUEST SENSE
-        sptd.Cdb[4]  = 18;   // allocation size
-
-        // send command
-        retval = DeviceIoControl(hVolume,IOCTL_SCSI_PASS_THROUGH_DIRECT,(PVOID)&sptd,
-                                 (DWORD)sizeof(SCSI_PASS_THROUGH_DIRECT), NULL, 0, &dwBytesReturned,NULL);
-        return retval;
-    }
-    else
-    {
-        printf("\nError: invalid handle");
-        return FALSE;
-    }
+    // send command
+    retval = DeviceIoControl(hVolume,IOCTL_SCSI_PASS_THROUGH_DIRECT,(PVOID)&sptd,
+                             (DWORD)sizeof(SCSI_PASS_THROUGH_DIRECT), NULL, 0, &dwBytesReturned,NULL);
+    return retval;
 }
 
 static BOOL ModeSense(char DriveLetter, unsigned char PageCode, unsigned char SubPageCode, int size)
 {
     BOOL retval;
+    DWORD dwBytesReturned;
 
-    if (hVolume != INVALID_HANDLE_VALUE)
-    {
-        DWORD dwBytesReturned;
+    // fill in sptd structure
+    InitSPTDStructureForREAD(10,0);    // command is 10 bytes long, we set the buffer size at next line
+    sptd.DataTransferLength = size;    // Size of data
 
-        // fill in sptd structure
-        InitSPTDStructureForREAD(10,0);    // command is 10 bytes long, we set the buffer size at next line
-        sptd.DataTransferLength = size;    // Size of data
+    // build CDB
+    ClearCDB();
+    sptd.Cdb[0]  = 0x5A;                     // MODE SENSE(10)
+    sptd.Cdb[2]  = PageCode;
+    sptd.Cdb[3]  = SubPageCode;
+    sptd.Cdb[7]  = byte((size>>8)&0xFF);     // size
+    sptd.Cdb[8]  = byte((size)&0xFF);
 
-        // build CDB
-        ClearCDB();
-        sptd.Cdb[0]  = 0x5A;                     // MODE SENSE(10)
-        sptd.Cdb[2]  = PageCode;
-        sptd.Cdb[3]  = SubPageCode;
-        sptd.Cdb[7]  = byte((size>>8)&0xFF);     // size
-        sptd.Cdb[8]  = byte((size)&0xFF);
-
-        // send command
-        retval = DeviceIoControl(hVolume,IOCTL_SCSI_PASS_THROUGH_DIRECT,(PVOID)&sptd,
-                                 (DWORD)sizeof(SCSI_PASS_THROUGH_DIRECT), NULL, 0, &dwBytesReturned,NULL);
-        return retval;
-    }
-    else
-    {
-        printf("\nError: invalid handle");
-        return FALSE;
-    }
+    // send command
+    retval = DeviceIoControl(hVolume,IOCTL_SCSI_PASS_THROUGH_DIRECT,(PVOID)&sptd,
+                             (DWORD)sizeof(SCSI_PASS_THROUGH_DIRECT), NULL, 0, &dwBytesReturned,NULL);
+    return retval;
 }
 
 // WARNING: this ModeSelect function should always be called just after a ModeSense call
@@ -502,67 +421,49 @@ static BOOL ModeSense(char DriveLetter, unsigned char PageCode, unsigned char Su
 static BOOL ModeSelect(char DriveLetter, unsigned char PageCode, unsigned char SubPageCode, int size)
 {
     BOOL retval;
+    DWORD dwBytesReturned;
 
-    if (hVolume != INVALID_HANDLE_VALUE)
-    {
-        DWORD dwBytesReturned;
+    // fill in sptd structure
+    InitSPTDStructureForREAD(10,0);    // command is 10 bytes long, we set the buffer size at next line
+    sptd.DataTransferLength = size;    // Size of data
 
-        // fill in sptd structure
-        InitSPTDStructureForREAD(10,0);    // command is 10 bytes long, we set the buffer size at next line
-        sptd.DataTransferLength = size;    // Size of data
+    // build CDB
+    ClearCDB();
+    sptd.Cdb[0]  = 0x55;                     // MODE SENSE(10)
+    sptd.Cdb[2]  = PageCode;
+    sptd.Cdb[3]  = SubPageCode;
+    sptd.Cdb[7]  = byte((size>>8)&0xFF);     // size
+    sptd.Cdb[8]  = byte((size)&0xFF);
 
-        // build CDB
-        ClearCDB();
-        sptd.Cdb[0]  = 0x55;                     // MODE SENSE(10)
-        sptd.Cdb[2]  = PageCode;
-        sptd.Cdb[3]  = SubPageCode;
-        sptd.Cdb[7]  = byte((size>>8)&0xFF);     // size
-        sptd.Cdb[8]  = byte((size)&0xFF);
-
-        // send command
-        retval = DeviceIoControl(hVolume,IOCTL_SCSI_PASS_THROUGH_DIRECT,(PVOID)&sptd,
-                                 (DWORD)sizeof(SCSI_PASS_THROUGH_DIRECT), NULL, 0, &dwBytesReturned,NULL);
-        return retval;
-    }
-    else
-    {
-        printf("\nError: invalid handle");
-        return FALSE;
-    }
+    // send command
+    retval = DeviceIoControl(hVolume,IOCTL_SCSI_PASS_THROUGH_DIRECT,(PVOID)&sptd,
+                             (DWORD)sizeof(SCSI_PASS_THROUGH_DIRECT), NULL, 0, &dwBytesReturned,NULL);
+    return retval;
 }
 
 static BOOL Prefetch(char DriveLetter, long int TargetSector, unsigned int NbSectors)
 {
     BOOL retval;
+    DWORD dwBytesReturned;
 
-    if (hVolume != INVALID_HANDLE_VALUE)
-    {
-        DWORD dwBytesReturned;
+    // fill in sptd structure
+    InitSPTDStructureForREAD(10,0);   // command is 10 bytes long, we set the buffer size at next line
+    sptd.DataTransferLength = 18;     // Size of data
 
-        // fill in sptd structure
-        InitSPTDStructureForREAD(10,0);   // command is 10 bytes long, we set the buffer size at next line
-        sptd.DataTransferLength = 18;     // Size of data
+    // build CDB
+    ClearCDB();
+    sptd.Cdb[0]  = 0x34;    // PREFETCH
+    sptd.Cdb[2]  = byte((TargetSector>>24)&0xFF); // target sector
+    sptd.Cdb[3]  = byte((TargetSector>>16)&0xFF);
+    sptd.Cdb[4]  = byte((TargetSector>>8)&0xFF);
+    sptd.Cdb[5]  = byte((TargetSector)&0xFF);
+    sptd.Cdb[7]  = byte((NbSectors>>8)&0xFF);     // size
+    sptd.Cdb[8]  = byte((NbSectors)&0xFF);
 
-        // build CDB
-        ClearCDB();
-        sptd.Cdb[0]  = 0x34;    // PREFETCH
-        sptd.Cdb[2]  = byte((TargetSector>>24)&0xFF); // target sector
-        sptd.Cdb[3]  = byte((TargetSector>>16)&0xFF);
-        sptd.Cdb[4]  = byte((TargetSector>>8)&0xFF);
-        sptd.Cdb[5]  = byte((TargetSector)&0xFF);
-        sptd.Cdb[7]  = byte((NbSectors>>8)&0xFF);     // size
-        sptd.Cdb[8]  = byte((NbSectors)&0xFF);
-
-        // send command
-        retval = DeviceIoControl(hVolume,IOCTL_SCSI_PASS_THROUGH_DIRECT,(PVOID)&sptd,
-                                 (DWORD)sizeof(SCSI_PASS_THROUGH_DIRECT), NULL, 0, &dwBytesReturned,NULL);
-        return retval;
-    }
-    else
-    {
-        printf("\nError: invalid handle");
-        return FALSE;
-    }
+    // send command
+    retval = DeviceIoControl(hVolume,IOCTL_SCSI_PASS_THROUGH_DIRECT,(PVOID)&sptd,
+                             (DWORD)sizeof(SCSI_PASS_THROUGH_DIRECT), NULL, 0, &dwBytesReturned,NULL);
+    return retval;
 }
 
 static HANDLE OpenVolume(char DriveLetter)
@@ -633,36 +534,27 @@ static void PrintIDString(unsigned char* dataChars, int dataLength)
 static BOOL PrintDriveInfo(char DriveLetter)
 {
     BOOL retval;
+    DWORD dwBytesReturned;
 
-    if (hVolume != INVALID_HANDLE_VALUE)
-    {
-        DWORD dwBytesReturned;
+    // fill in sptd structure
+    InitSPTDStructureForREAD(6,0);    // INQUIRY command is 6 bytes long
+    sptd.DataTransferLength = 36;     // Size of data
 
-        // fill in sptd structure
-        InitSPTDStructureForREAD(6,0);    // INQUIRY command is 6 bytes long
-        sptd.DataTransferLength = 36;     // Size of data
+    // build CDB
+    ClearCDB();
+    sptd.Cdb[0]  = 0x12;    // INQUIRY
+    sptd.Cdb[4]  = 36;      // allocated size
 
-        // build CDB
-        ClearCDB();
-        sptd.Cdb[0]  = 0x12;    // INQUIRY
-        sptd.Cdb[4]  = 36;      // allocated size
+    // send command
+    retval = DeviceIoControl(hVolume,IOCTL_SCSI_PASS_THROUGH_DIRECT,(PVOID)&sptd,
+                             (DWORD)sizeof(SCSI_PASS_THROUGH_DIRECT), NULL, 0, &dwBytesReturned,NULL);
 
-        // send command
-        retval = DeviceIoControl(hVolume,IOCTL_SCSI_PASS_THROUGH_DIRECT,(PVOID)&sptd,
-                                 (DWORD)sizeof(SCSI_PASS_THROUGH_DIRECT), NULL, 0, &dwBytesReturned,NULL);
+    // print info
+    PrintIDString(&DataBuf[8], 8);         // vendor Id
+    PrintIDString(&DataBuf[0x10], 0x10);   // product Id
+    PrintIDString(&DataBuf[0x20], 4);      // product RevisionLevel
 
-        // print info
-        PrintIDString(&DataBuf[8], 8);         // vendor Id
-        PrintIDString(&DataBuf[0x10], 0x10);   // product Id
-        PrintIDString(&DataBuf[0x20], 4);      // product RevisionLevel
-
-        return retval;
-    }
-    else
-    {
-        printf("\nError: invalid handle");
-        return FALSE;
-    }
+    return retval;
 }
 
 // BOOL ClearCache()
@@ -723,32 +615,24 @@ static BOOL SetDriveSpeed(char DriveLetter, unsigned char ReadSpeedX, unsigned c
     unsigned int ReadSpeedkB  = (ReadSpeedX  * 176) + 2;  // 1x CD = 176kB/s
     unsigned int WriteSpeedkB = (WriteSpeedX * 176);
 
-    if (hVolume != INVALID_HANDLE_VALUE)
-    {
-        DWORD dwBytesReturned;
+    DWORD dwBytesReturned;
 
-        // fill in sptd structure
-        InitSPTDStructureForREAD(12,0);    // command is 12 bytes long, we set the buffer size at next line
-        sptd.DataTransferLength = 18;      // Size of data
+    // fill in sptd structure
+    InitSPTDStructureForREAD(12,0);    // command is 12 bytes long, we set the buffer size at next line
+    sptd.DataTransferLength = 18;      // Size of data
 
-        // build CDB
-        ClearCDB();
-        sptd.Cdb[0]  = 0xBB;    // SET CD SPEED
-        sptd.Cdb[2]  = (ReadSpeedX == 0) ? 0xFF : (ReadSpeedkB>>8)&0xFF;
-        sptd.Cdb[3]  = (ReadSpeedX == 0) ? 0xFF : ReadSpeedkB&0xFF;
-        sptd.Cdb[4]  = (WriteSpeedkB>>8)&0xFF;
-        sptd.Cdb[5]  =  WriteSpeedkB&0xFF;
+    // build CDB
+    ClearCDB();
+    sptd.Cdb[0]  = 0xBB;    // SET CD SPEED
+    sptd.Cdb[2]  = (ReadSpeedX == 0) ? 0xFF : (ReadSpeedkB>>8)&0xFF;
+    sptd.Cdb[3]  = (ReadSpeedX == 0) ? 0xFF : ReadSpeedkB&0xFF;
+    sptd.Cdb[4]  = (WriteSpeedkB>>8)&0xFF;
+    sptd.Cdb[5]  =  WriteSpeedkB&0xFF;
 
-        // send command
-        retval = DeviceIoControl(hVolume,IOCTL_SCSI_PASS_THROUGH_DIRECT,(PVOID)&sptd,
-                                 (DWORD)sizeof(SCSI_PASS_THROUGH_DIRECT), NULL, 0, &dwBytesReturned,NULL);
-        return retval;
-    }
-    else
-    {
-        printf("\nError: invalid handle");
-        return FALSE;
-    }
+    // send command
+    retval = DeviceIoControl(hVolume,IOCTL_SCSI_PASS_THROUGH_DIRECT,(PVOID)&sptd,
+                             (DWORD)sizeof(SCSI_PASS_THROUGH_DIRECT), NULL, 0, &dwBytesReturned,NULL);
+    return retval;
 }
 
 static void ShowCacheValues(char DriveLetter)
