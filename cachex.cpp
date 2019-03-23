@@ -88,11 +88,8 @@
 #endif
 
 // global variables
-static SCSI_PASS_THROUGH_DIRECT sptd;
-static uint8_t* DataBuf;
 static int NbBurstReadSectors = 1;
 static uint8_t SenseBuf[255];
-static LARGE_INTEGER PerfCountStart, PerfCountEnd;
 static LARGE_INTEGER freq = {0};
 static double Delay = 0, Delay2 = 0, InitDelay = 0;
 static double AverageDelay = 0;
@@ -323,9 +320,18 @@ namespace Command {
   }
 }
 
+struct CommandResult {
+  CommandResult(unsigned int NumOutBytes):Valid(false), Duration(0.0), ScsiStatus(0xff), Data(NumOutBytes) {}
+
+  bool Valid;
+  double Duration;
+  std::uint8_t ScsiStatus;
+  std::vector<std::uint8_t> Data;
+};
+
 template<std::size_t CDBLength>
-static void InitSPTDStructureForREAD(unsigned int NbSectors, const std::array<std::uint8_t, CDBLength> &cdb) {
-  // fill in sptd structure
+static void ExecCommand(CommandResult& rv, const std::array<std::uint8_t, CDBLength> &cdb) {
+  SCSI_PASS_THROUGH_DIRECT sptd;
   sptd.Length             = sizeof(sptd);
   sptd.PathId             = 0;                  // SCSI card ID will be filled in automatically
   sptd.TargetId           = 0;                  // SCSI target ID will also be filled in
@@ -333,112 +339,74 @@ static void InitSPTDStructureForREAD(unsigned int NbSectors, const std::array<st
   sptd.CdbLength          = CDBLength;          // CDB size
   sptd.SenseInfoLength    = 0;                  // Don't return any sense data
   sptd.DataIn             = SCSI_IOCTL_DATA_IN; // There will be data from drive
-  sptd.DataTransferLength = 2448 * NbSectors;   // Size of data
+  sptd.DataTransferLength = rv.Data.size();     // Size of data
   sptd.TimeOutValue       = 60;                 // SCSI timeout value
-  sptd.DataBuffer         = (PVOID)(DataBuf);
+  sptd.DataBuffer         = rv.Data.data();
   sptd.SenseInfoOffset    = 0;
   std::copy(std::begin(cdb), std::end(cdb), sptd.Cdb);
+
+  LARGE_INTEGER PerfCountStart, PerfCountEnd;
+  DWORD dwBytesReturned;
+
+  MP_QueryPerformanceCounter(&PerfCountStart);
+  auto io_ok = DeviceIoControl(hVolume,IOCTL_SCSI_PASS_THROUGH_DIRECT,&sptd,
+                            sizeof(SCSI_PASS_THROUGH_DIRECT), NULL, 0, &dwBytesReturned,NULL);
+  MP_QueryPerformanceCounter(&PerfCountEnd);
+
+  rv.Valid = io_ok ? true : false;
+  // FIXME the subtraction should be done on integers and its result divided by the frequency in order
+  // to produce a double, but I'm keeping it untouched.
+  rv.Duration = ((double)PerfCountEnd.QuadPart - (double)PerfCountStart.QuadPart) / (double)freq.QuadPart;
+  rv.Data.resize(sptd.DataTransferLength);
+  rv.ScsiStatus = sptd.ScsiStatus;
+}
+
+template<std::size_t CDBLength>
+static CommandResult ExecSectorCommand(unsigned int NbSectors, const std::array<std::uint8_t, CDBLength> &cdb) {
+  CommandResult rv(2448 * NbSectors);
+  ExecCommand(rv, cdb);
+  return rv;
+}
+
+template<std::size_t CDBLength>
+static CommandResult ExecBytesCommand(unsigned int NbBytes, const std::array<std::uint8_t, CDBLength> &cdb) {
+  CommandResult rv(NbBytes);
+  ExecCommand(rv, cdb);
+  return rv;
 }
 
 //--------------------------------------------------------------------------------------------------------
 //-------------------------------------- Read functions --------------------------------------------------
 //--------------------------------------------------------------------------------------------------------
 
-static bool Read_A8h(char DriveLetter, long int TargetSector, int NbSectors, bool FUAbit)
+static CommandResult Read_A8h(long int TargetSector, int NbSectors, bool FUAbit)
 {
-    bool retval;
-    DWORD dwBytesReturned;
-
-    InitSPTDStructureForREAD(NbSectors, Command::Read_A8h(TargetSector, NbSectors, FUAbit));
-
-    // send command
-    MP_QueryPerformanceCounter(&PerfCountStart);
-    retval = DeviceIoControl(hVolume,IOCTL_SCSI_PASS_THROUGH_DIRECT,(PVOID)&sptd,
-                             (DWORD)sizeof(SCSI_PASS_THROUGH_DIRECT), NULL, 0, &dwBytesReturned,NULL);
-    MP_QueryPerformanceCounter(&PerfCountEnd);
-
-    return retval;
+    return ExecSectorCommand(NbSectors, Command::Read_A8h(TargetSector, NbSectors, FUAbit));
 }
 
-static bool Read_28h(char DriveLetter, long int TargetSector, int NbSectors, bool FUAbit)
+static CommandResult Read_28h(long int TargetSector, int NbSectors, bool FUAbit)
 {
-    bool retval;
-    DWORD dwBytesReturned;
-
-    InitSPTDStructureForREAD(NbSectors, Command::Read_28h(TargetSector, NbSectors, FUAbit));
-
-    // send command
-    MP_QueryPerformanceCounter(&PerfCountStart);
-    retval = DeviceIoControl(hVolume,IOCTL_SCSI_PASS_THROUGH_DIRECT,(PVOID)&sptd,
-                             (DWORD)sizeof(SCSI_PASS_THROUGH_DIRECT), NULL, 0, &dwBytesReturned,NULL);
-    MP_QueryPerformanceCounter(&PerfCountEnd);
-
-    return retval;
+    return ExecSectorCommand(NbSectors, Command::Read_28h(TargetSector, NbSectors, FUAbit));
 }
 
-static bool Read_BEh(char DriveLetter, long int TargetSector, int NbSectors, bool FUAbit)
+static CommandResult Read_BEh(long int TargetSector, int NbSectors, bool FUAbit)
 {
-    bool retval;
-    DWORD dwBytesReturned;
-
-    InitSPTDStructureForREAD(NbSectors, Command::Read_BEh(TargetSector, NbSectors));
-
-    // send command
-    MP_QueryPerformanceCounter(&PerfCountStart);
-    retval = DeviceIoControl(hVolume,IOCTL_SCSI_PASS_THROUGH_DIRECT,(PVOID)&sptd,
-                             (DWORD)sizeof(SCSI_PASS_THROUGH_DIRECT), NULL, 0, &dwBytesReturned,NULL);
-    MP_QueryPerformanceCounter(&PerfCountEnd);
-
-    return retval;
+    return ExecSectorCommand(NbSectors, Command::Read_BEh(TargetSector, NbSectors));
 }
 
-static bool Read_D4h(char DriveLetter, long int TargetSector, int NbSectors, bool FUAbit)
+static CommandResult Read_D4h(long int TargetSector, int NbSectors, bool FUAbit)
 {
-    bool retval;
-    DWORD dwBytesReturned;
-
-    InitSPTDStructureForREAD(NbSectors, Command::Read_D4h(TargetSector, NbSectors, FUAbit));
-
-    // send command
-    MP_QueryPerformanceCounter(&PerfCountStart);
-    retval = DeviceIoControl(hVolume,IOCTL_SCSI_PASS_THROUGH_DIRECT,(PVOID)&sptd,
-                             (DWORD)sizeof(SCSI_PASS_THROUGH_DIRECT), NULL, 0, &dwBytesReturned,NULL);
-    MP_QueryPerformanceCounter(&PerfCountEnd);
-
-    return retval;
+    return ExecSectorCommand(NbSectors, Command::Read_D4h(TargetSector, NbSectors, FUAbit));
 }
 
-static bool Read_D5h(char DriveLetter, long int TargetSector, int NbSectors, bool FUAbit)
+static CommandResult Read_D5h(long int TargetSector, int NbSectors, bool FUAbit)
 {
-    bool retval;
-    DWORD dwBytesReturned;
-
-    InitSPTDStructureForREAD(NbSectors, Command::Read_D5h(TargetSector, NbSectors, FUAbit));
-
-    // send command
-    MP_QueryPerformanceCounter(&PerfCountStart);
-    retval = DeviceIoControl(hVolume,IOCTL_SCSI_PASS_THROUGH_DIRECT,(PVOID)&sptd,
-                             (DWORD)sizeof(SCSI_PASS_THROUGH_DIRECT), NULL, 0, &dwBytesReturned,NULL);
-    MP_QueryPerformanceCounter(&PerfCountEnd);
-
-    return retval;
+    return ExecSectorCommand(NbSectors, Command::Read_D5h(TargetSector, NbSectors, FUAbit));
 }
 
-
-static bool Read_D8h(char DriveLetter, long int TargetSector, int NbSectors, bool FUAbit)
+static CommandResult Read_D8h(long int TargetSector, int NbSectors, bool FUAbit)
 {
-    bool retval;
-    DWORD dwBytesReturned;
-
-    InitSPTDStructureForREAD(NbSectors, Command::Read_D8h(TargetSector, NbSectors, FUAbit));
-
-    // send command
-    MP_QueryPerformanceCounter(&PerfCountStart);
-    retval = DeviceIoControl(hVolume,IOCTL_SCSI_PASS_THROUGH_DIRECT,(PVOID)&sptd,
-                             (DWORD)sizeof(SCSI_PASS_THROUGH_DIRECT), NULL, 0, &dwBytesReturned,NULL);
-    MP_QueryPerformanceCounter(&PerfCountEnd);
-
-    return retval;
+    return ExecSectorCommand(NbSectors, Command::Read_D8h(TargetSector, NbSectors, FUAbit));
 }
 
 // drive characteristics
@@ -449,7 +417,7 @@ static int NbCacheLines = 0;
 typedef struct
 {
     unsigned char FuncByte;
-    bool (*pFunc)(char, long int, int, bool);
+    CommandResult (*pFunc)(long int, int, bool);
     bool Supported;
     bool FUAbitSupported;
 } sReadCommand;
@@ -467,82 +435,34 @@ static sReadCommand Commands[NB_READ_COMMANDS] = {
 //------------------------------------------------- CODE -------------------------------------------------
 //--------------------------------------------------------------------------------------------------------
 
-static bool PlextorFUAFlush(char DriveLetter, long int TargetSector)
+static CommandResult PlextorFUAFlush(long int TargetSector)
 {
-    bool retval;
-    DWORD dwBytesReturned;
-
-    InitSPTDStructureForREAD(0, Command::PlextorFUAFlush(TargetSector));
-
-    // send command
-    MP_QueryPerformanceCounter(&PerfCountStart);
-    retval = DeviceIoControl(hVolume,IOCTL_SCSI_PASS_THROUGH_DIRECT,(PVOID)&sptd,
-                             (DWORD)sizeof(SCSI_PASS_THROUGH_DIRECT), NULL, 0, &dwBytesReturned,NULL);
-    MP_QueryPerformanceCounter(&PerfCountEnd);
-    return retval;
+    return ExecSectorCommand(0, Command::PlextorFUAFlush(TargetSector));
 }
 
-static bool RequestSense(char DriveLetter)
+static CommandResult RequestSense()
 {
-    bool retval;
-    DWORD dwBytesReturned;
     const std::uint8_t AllocationLength = 18;
-
-    // fill in sptd structure
-    InitSPTDStructureForREAD(0, Command::RequestSense(AllocationLength));   // command is 5 bytes long, we set the buffer size at next line
-    sptd.DataTransferLength = AllocationLength;    // Size of data
-
-    // send command
-    retval = DeviceIoControl(hVolume,IOCTL_SCSI_PASS_THROUGH_DIRECT,(PVOID)&sptd,
-                             (DWORD)sizeof(SCSI_PASS_THROUGH_DIRECT), NULL, 0, &dwBytesReturned,NULL);
-    return retval;
+    return ExecBytesCommand(AllocationLength, Command::RequestSense(AllocationLength));
 }
 
-static bool ModeSense(char DriveLetter, unsigned char PageCode, unsigned char SubPageCode, int size)
+static CommandResult ModeSense(unsigned char PageCode, unsigned char SubPageCode, int size)
 {
-    bool retval;
-    DWORD dwBytesReturned;
-
-    // fill in sptd structure
-    InitSPTDStructureForREAD(0, Command::ModeSense(PageCode, SubPageCode, size));    // command is 10 bytes long, we set the buffer size at next line
-    sptd.DataTransferLength = size;    // Size of data
-
-    // send command
-    retval = DeviceIoControl(hVolume,IOCTL_SCSI_PASS_THROUGH_DIRECT,(PVOID)&sptd,
-                             (DWORD)sizeof(SCSI_PASS_THROUGH_DIRECT), NULL, 0, &dwBytesReturned,NULL);
-    return retval;
+    return ExecBytesCommand(size, Command::ModeSense(PageCode, SubPageCode, size));
 }
 
+// FIXME this is probably broken exactly due to the comment below : when sptd was a global,
+// effects of the previous command's execution remained there.
 // WARNING: this ModeSelect function should always be called just after a ModeSense call
 // because the Mode PArameter List is not rebuilt !
-static bool ModeSelect(char DriveLetter, unsigned char PageCode, unsigned char SubPageCode, int size)
+static CommandResult ModeSelect(unsigned char PageCode, unsigned char SubPageCode, int size)
 {
-    bool retval;
-    DWORD dwBytesReturned;
-
-    // fill in sptd structure
-    InitSPTDStructureForREAD(0, Command::ModeSelect(PageCode, SubPageCode, size));    // command is 10 bytes long, we set the buffer size at next line
-    sptd.DataTransferLength = size;    // Size of data
-
-    // send command
-    retval = DeviceIoControl(hVolume,IOCTL_SCSI_PASS_THROUGH_DIRECT,(PVOID)&sptd,
-                             (DWORD)sizeof(SCSI_PASS_THROUGH_DIRECT), NULL, 0, &dwBytesReturned,NULL);
-    return retval;
+    return ExecBytesCommand(size, Command::ModeSelect(PageCode, SubPageCode, size));
 }
 
-static bool Prefetch(char DriveLetter, long int TargetSector, unsigned int NbSectors)
+static CommandResult Prefetch(long int TargetSector, unsigned int NbSectors)
 {
-    bool retval;
-    DWORD dwBytesReturned;
-
-    // fill in sptd structure
-    InitSPTDStructureForREAD(0, Command::Prefetch(TargetSector, NbSectors));   // command is 10 bytes long, we set the buffer size at next line
-    sptd.DataTransferLength = 18;     // Size of data
-
-    // send command
-    retval = DeviceIoControl(hVolume,IOCTL_SCSI_PASS_THROUGH_DIRECT,(PVOID)&sptd,
-                             (DWORD)sizeof(SCSI_PASS_THROUGH_DIRECT), NULL, 0, &dwBytesReturned,NULL);
-    return retval;
+    return ExecBytesCommand(18, Command::Prefetch(TargetSector, NbSectors));
 }
 
 static HANDLE OpenVolume(char DriveLetter)
@@ -587,11 +507,6 @@ static HANDLE OpenVolume(char DriveLetter)
     return hVolume;
 }
 
-static bool CloseVolume(HANDLE hVolume)
-{
-    return CloseHandle(hVolume);
-}
-
 static void PrintIDString(unsigned char* dataChars, int dataLength)
 {
     if (dataChars != NULL)
@@ -612,31 +527,22 @@ static void PrintIDString(unsigned char* dataChars, int dataLength)
 
 static bool PrintDriveInfo(char DriveLetter)
 {
-    bool retval;
-    DWORD dwBytesReturned;
-
-    // fill in sptd structure
     const std::uint8_t AllocationLength = 36;
-    InitSPTDStructureForREAD(0, Command::Inquiry(AllocationLength));    // INQUIRY command is 6 bytes long
-    sptd.DataTransferLength = AllocationLength;     // Size of data
-
-    // send command
-    retval = DeviceIoControl(hVolume,IOCTL_SCSI_PASS_THROUGH_DIRECT,(PVOID)&sptd,
-                             (DWORD)sizeof(SCSI_PASS_THROUGH_DIRECT), NULL, 0, &dwBytesReturned,NULL);
+    auto result = ExecBytesCommand(AllocationLength, Command::Inquiry(AllocationLength));
 
     // print info
-    PrintIDString(&DataBuf[8], 8);         // vendor Id
-    PrintIDString(&DataBuf[0x10], 0x10);   // product Id
-    PrintIDString(&DataBuf[0x20], 4);      // product RevisionLevel
+    PrintIDString(&result.Data[8], 8);         // vendor Id
+    PrintIDString(&result.Data[0x10], 0x10);   // product Id
+    PrintIDString(&result.Data[0x20], 4);      // product RevisionLevel
 
-    return retval;
+    return true; // FIXME we print anyway, and the old code did too, so we always succeed.
 }
 
 // bool ClearCache()
 //
 // fills the cache by reading backwards several areas at the beginning of the disc
 //
-static bool ClearCache(char DriveLetter)
+static bool ClearCache()
 {
     int i,j;
     bool retval = false;
@@ -647,7 +553,9 @@ static bool ClearCache(char DriveLetter)
         {
             for (j=0 ; j<MAX_CACHE_LINES ; j++)
             {
-                retval += Commands[i].pFunc(DriveLetter, (MAX_CACHE_LINES-j+1)*1000, 1, false);
+                // old code added the original return value from these functions
+                // but then assigned true in the next line anyway, so...
+                Commands[i].pFunc((MAX_CACHE_LINES-j+1)*1000, 1, false);
             }
             retval = true;
             break;
@@ -657,7 +565,7 @@ static bool ClearCache(char DriveLetter)
 
 }
 
-static bool SpinDrive(char DriveLetter, unsigned int Seconds)
+static bool SpinDrive(unsigned int Seconds)
 {
     bool retval = false;
     int i = 0, j=0;
@@ -678,60 +586,53 @@ static bool SpinDrive(char DriveLetter, unsigned int Seconds)
         TimeStart = GetTickCount();
         while( GetTickCount() - TimeStart <= (unsigned long)(Seconds * 1000) )
         {
-            Commands[i].pFunc(DriveLetter, (10000+(j++))%50000, 1, false);
+            Commands[i].pFunc((10000+(j++))%50000, 1, false);
         }
     }
-    return(retval);
+    return retval;
 }
 
-static bool SetDriveSpeed(char DriveLetter, unsigned char ReadSpeedX, unsigned char WriteSpeedX)
+static CommandResult SetDriveSpeed(unsigned char ReadSpeedX, unsigned char WriteSpeedX)
 {
-    bool retval = false;
-
-    DWORD dwBytesReturned;
-
-    // fill in sptd structure
-    InitSPTDStructureForREAD(0, Command::SetCDSpeed(ReadSpeedX, WriteSpeedX));    // command is 12 bytes long, we set the buffer size at next line
-    sptd.DataTransferLength = 18;      // Size of data
-
-    // send command
-    retval = DeviceIoControl(hVolume,IOCTL_SCSI_PASS_THROUGH_DIRECT,(PVOID)&sptd,
-                             (DWORD)sizeof(SCSI_PASS_THROUGH_DIRECT), NULL, 0, &dwBytesReturned,NULL);
-    return retval;
+    return ExecBytesCommand(18, Command::SetCDSpeed(ReadSpeedX, WriteSpeedX));
 }
 
 static void ShowCacheValues(char DriveLetter)
 {
-    if (ModeSense(DriveLetter, CD_DVD_CAPABILITIES_PAGE, 0, 32))
+    auto result = ModeSense(CD_DVD_CAPABILITIES_PAGE, 0, 32);
+    if (result.Valid)
     {
-        printf("\n[+] Buffer size: %d kB",(DataBuf[DESCRIPTOR_BLOCK_1+12]<<8)+DataBuf[DESCRIPTOR_BLOCK_1+13]);
+        printf("\n[+] Buffer size: %d kB",(result.Data[DESCRIPTOR_BLOCK_1+12]<<8) | result.Data[DESCRIPTOR_BLOCK_1+13]);
     }
     else
     {
         SUPERDEBUG("\ninfo: cannot read CD/DVD Capabilities page");
-        RequestSense(DriveLetter);
+        RequestSense();
     }
-    if (ModeSense(DriveLetter, CACHING_MODE_PAGE, 0, 18))
+    result = ModeSense(CACHING_MODE_PAGE, 0, 18);
+    if (result.Valid)
     {
-        printf(", read cache is %s", (DataBuf[DESCRIPTOR_BLOCK_1+2] & RCD_BIT) ? "disabled" : "enabled");
+        printf(", read cache is %s", (result.Data[DESCRIPTOR_BLOCK_1+2] & RCD_BIT) ? "disabled" : "enabled");
     }
     else
     {
         SUPERDEBUG("\ninfo: cannot read Caching Mode page");
-        RequestSense(DriveLetter);
+        RequestSense();
     }
 }
 
-static bool SetCacheRCDBit(char DriveLetter, bool RCDBitValue)
+static bool SetCacheRCDBit(bool RCDBitValue)
 {
     bool retval = false;
 
-    if (ModeSense(DriveLetter, CACHING_MODE_PAGE, 0, 18))
+    // FIXME
+#if 0
+    if (ModeSense( CACHING_MODE_PAGE, 0, 18))
     {
         DataBuf[DESCRIPTOR_BLOCK_1+2] = (DataBuf[DESCRIPTOR_BLOCK_1+2] & 0xFE) + RCDBitValue;
-        if (ModeSelect(DriveLetter, CACHING_MODE_PAGE, 0, 20))
+        if (ModeSelect( CACHING_MODE_PAGE, 0, 20))
         {
-            ModeSense(DriveLetter, CACHING_MODE_PAGE, 0, 18);
+            ModeSense( CACHING_MODE_PAGE, 0, 18);
             if ((DataBuf[DESCRIPTOR_BLOCK_1+2] & RCD_BIT) == RCDBitValue)
             {
                 retval = true;
@@ -745,9 +646,10 @@ static bool SetCacheRCDBit(char DriveLetter, bool RCDBitValue)
         }
     }
     else
+#endif
     {
         DEBUG("\ninfo: cannot read Caching Mode page");
-        RequestSense(DriveLetter);
+        RequestSense();
     }
     return(retval);
 }
@@ -764,33 +666,34 @@ static bool SetCacheRCDBit(char DriveLetter, bool RCDBitValue)
 //--------------------------------------------------------------------------------------------------------
 static void TestSupportedReadCommands(char DriveLetter)
 {
-    int i;
-
     printf(SUPPORTEDREADCOMMANDS);
-    for (i=0; i<NB_READ_COMMANDS; i++)
+    for (int i=0; i<NB_READ_COMMANDS; i++)
     {
-        if (Commands[i].pFunc(DriveLetter, 10000, 1, false))
+        auto &&cmd = Commands[i];
+        auto result = cmd.pFunc(10000, 1, false);
+        if (result.Valid)
         {
-            printf(" %2Xh",(Commands[i].FuncByte)&0xFF);
-            Commands[i].Supported = true;
-            if (Commands[i].FUAbitSupported)
+            printf(" %2Xh",(cmd.FuncByte)&0xFF);
+            cmd.Supported = true;
+            if (cmd.FUAbitSupported)
             {
-                if (Commands[i].pFunc(DriveLetter, 9900, 1, true))
+                result = cmd.pFunc(9900, 1, true);
+                if (result.Valid)
                 {
                     printf(FUAMSG);
                 }
                 else
                 {
-                    SUPERDEBUG("\ncommand %2Xh with FUA bit rejected",Commands[i].FuncByte);
-                    Commands[i].FUAbitSupported = false;
-                    RequestSense(DriveLetter);
+                    SUPERDEBUG("\ncommand %2Xh with FUA bit rejected",cmd.FuncByte);
+                    cmd.FUAbitSupported = false;
+                    RequestSense();
                 }
             }
         }
         else
         {
-            SUPERDEBUG("\ncommand %2Xh rejected",Commands[i].FuncByte);
-            RequestSense(DriveLetter);
+            SUPERDEBUG("\ncommand %2Xh rejected",cmd.FuncByte);
+            RequestSense();
         }
     }
     ReadCommandsDetected = true;
@@ -800,52 +703,43 @@ static void TestSupportedReadCommands(char DriveLetter)
 // TestPlextorFUACommand
 //
 // test if Plextor's flushing command is supported
-static bool TestPlextorFUACommand(char DriveLetter, int NbIterations)
+static bool TestPlextorFUACommand(int NbIterations)
 {
     printf(TESTINGPLEXFUA);
-    if (!PlextorFUAFlush(DriveLetter, 100000))
-    {
-        printf(REJECTED);
-        DEBUG(" (status = %d)",sptd.ScsiStatus);
-        return(false);
-    }
-    else
-    {
-        printf(ACCEPTED);
-        DEBUG(" (status = %d)",sptd.ScsiStatus);
-        return(true);
-    }
+    auto result = PlextorFUAFlush(100000);
+    printf("%s", result.Valid ? ACCEPTED : REJECTED);
+    DEBUG(" (status = %d)",result.ScsiStatus);
+    return result.Valid;
 }
 
 //
 // TestPlextorFUACommandWorks
 //
 // test if Plextor's flushing command actually works
-static int TestPlextorFUACommandWorks(char DriveLetter, int ReadCommand, long int TargetSector, int NbTests)
+static int TestPlextorFUACommandWorks(int ReadCommand, long int TargetSector, int NbTests)
 {
-    int i;
     int InvalidationSuccess = 0;
     double InitDelay2 = 0;
 
     DEBUG("\ninfo: %d test(s), c/nc ratio: %d, burst: %d, max: %d",
            NbTests, CachedNonCachedSpeedFactor, NbBurstReadSectors, MaxCacheSectors);
 
-    for (i=0; i<NbTests; i++)
+    for (int i=0; i<NbTests; i++)
     {
         // first test : normal cache test
-        ClearCache(DriveLetter);
-        Commands[ReadCommand].pFunc(DriveLetter, TargetSector, NbBurstReadSectors, false); // init read
-        InitDelay = ((double)PerfCountEnd.QuadPart - (double)PerfCountStart.QuadPart) / (double)freq.QuadPart;
-        Commands[ReadCommand].pFunc(DriveLetter, TargetSector + NbBurstReadSectors, NbBurstReadSectors, false);
-        Delay = ((double)PerfCountEnd.QuadPart - (double)PerfCountStart.QuadPart) / (double)freq.QuadPart;
+        ClearCache();
+        auto result = Commands[ReadCommand].pFunc(TargetSector, NbBurstReadSectors, false); // init read
+        InitDelay = result.Duration;
+        result = Commands[ReadCommand].pFunc(TargetSector + NbBurstReadSectors, NbBurstReadSectors, false);
+        Delay = result.Duration;
 
         // second test : add a Plextor FUA flush command in between
-        ClearCache(DriveLetter);
-        Commands[ReadCommand].pFunc(DriveLetter, TargetSector, NbBurstReadSectors, false); // init read
-        InitDelay2 = ((double)PerfCountEnd.QuadPart - (double)PerfCountStart.QuadPart) / (double)freq.QuadPart;
-        PlextorFUAFlush(DriveLetter, TargetSector);
-        Commands[ReadCommand].pFunc(DriveLetter, TargetSector + NbBurstReadSectors, NbBurstReadSectors, false);
-        Delay2 = ((double)PerfCountEnd.QuadPart - (double)PerfCountStart.QuadPart) / (double)freq.QuadPart;
+        ClearCache();
+        result = Commands[ReadCommand].pFunc(TargetSector, NbBurstReadSectors, false); // init read
+        InitDelay2 = result.Duration;
+        PlextorFUAFlush(TargetSector);
+        result = Commands[ReadCommand].pFunc(TargetSector + NbBurstReadSectors, NbBurstReadSectors, false);
+        Delay2 = result.Duration;
         DEBUG("\n %.2f ms / %.2f ms -> %.2f ms / %.2f ms", InitDelay, Delay, InitDelay2, Delay2);
 
         // compare times
@@ -859,7 +753,7 @@ static int TestPlextorFUACommandWorks(char DriveLetter, int ReadCommand, long in
 }
 
 // wrapper for TestPlextorFUACommandWorks
-static int TestPlextorFUACommandWorksWrapper(char DriveLetter, long int TargetSector, int NbTests)
+static int TestPlextorFUACommandWorksWrapper(long int TargetSector, int NbTests)
 {
     int ValidReadCommand;
     int retval = 0;
@@ -871,7 +765,7 @@ static int TestPlextorFUACommandWorksWrapper(char DriveLetter, long int TargetSe
             if (Commands[ValidReadCommand].Supported)
             {
                 DEBUG("\ninfo: using command %02Xh",Commands[ValidReadCommand].FuncByte);
-                retval = TestPlextorFUACommandWorks(DriveLetter, ValidReadCommand, TargetSector, NbTests);
+                retval = TestPlextorFUACommandWorks(ValidReadCommand, TargetSector, NbTests);
                 break;
             }
         }
@@ -887,7 +781,7 @@ static int TestPlextorFUACommandWorksWrapper(char DriveLetter, long int TargetSe
 //
 // TimeMultipleReads
 //
-static void TimeMultipleReads(char DriveLetter, unsigned char ReadCommand, long int TargetSector, int NbReads, bool FUAbit)
+static void TimeMultipleReads(unsigned char ReadCommand, long int TargetSector, int NbReads, bool FUAbit)
 {
     int i = 0;
 
@@ -895,8 +789,8 @@ static void TimeMultipleReads(char DriveLetter, unsigned char ReadCommand, long 
 
     for (i=0; i<NbReads; i++)
     {
-        Commands[ReadCommand].pFunc(DriveLetter, TargetSector, NbBurstReadSectors, FUAbit);
-        Delay = ((double)PerfCountEnd.QuadPart - (double)PerfCountStart.QuadPart) / (double)freq.QuadPart;
+        auto result = Commands[ReadCommand].pFunc(TargetSector, NbBurstReadSectors, FUAbit);
+        Delay = result.Duration;
         AverageDelay = (((AverageDelay * i) + Delay) / (i + 1));
     }
 }
@@ -905,7 +799,7 @@ static void TimeMultipleReads(char DriveLetter, unsigned char ReadCommand, long 
 // TestCacheSpeedImpact
 //
 // compare reading times with FUA bit (to disc) and without FUA (from cache)
-static void TestCacheSpeedImpact(char DriveLetter, long int TargetSector, int NbReads)
+static void TestCacheSpeedImpact(long int TargetSector, int NbReads)
 {
     int i;
 
@@ -913,12 +807,12 @@ static void TestCacheSpeedImpact(char DriveLetter, long int TargetSector, int Nb
     {
         if ((Commands[i].Supported) && (Commands[i].FUAbitSupported))
         {
-            Commands[i].pFunc(DriveLetter, TargetSector, NbBurstReadSectors, false);             // initial load
+            Commands[i].pFunc(TargetSector, NbBurstReadSectors, false);             // initial load
 
-            TimeMultipleReads(DriveLetter, i, TargetSector, NbReads, false);
+            TimeMultipleReads(i, TargetSector, NbReads, false);
             printf(AVERAGE_NORMAL, (Commands[i].FuncByte)&0xFF, AverageDelay);
 
-            TimeMultipleReads(DriveLetter, i, TargetSector, NbReads, true);     // with FUA
+            TimeMultipleReads(i, TargetSector, NbReads, true);     // with FUA
             printf(AVERAGE_FUA, AverageDelay);
 
             i = NB_READ_COMMANDS;
@@ -930,7 +824,7 @@ static void TestCacheSpeedImpact(char DriveLetter, long int TargetSector, int Nb
 // TestRCDBitWorks
 //
 // test if cache can be disabled via RCD bit
-static int TestRCDBitWorks(char DriveLetter, int ReadCommand, long int TargetSector, int NbTests)
+static int TestRCDBitWorks(int ReadCommand, long int TargetSector, int NbTests)
 {
     int i;
     int InvalidationSuccess = 0;
@@ -940,33 +834,33 @@ static int TestRCDBitWorks(char DriveLetter, int ReadCommand, long int TargetSec
     for (i=0; i<NbTests; i++)
     {
         // enable caching
-        if (!SetCacheRCDBit(DriveLetter,RCD_READ_CACHE_ENABLED))
+        if (!SetCacheRCDBit(RCD_READ_CACHE_ENABLED))
         {
             i = NbTests;
             break;
         }
 
         // first test : normal cache test
-        ClearCache(DriveLetter);
-        Commands[ReadCommand].pFunc(DriveLetter, TargetSector, NbBurstReadSectors, false); // init read
-        InitDelay = ((double)PerfCountEnd.QuadPart - (double)PerfCountStart.QuadPart) / (double)freq.QuadPart;
-        Commands[ReadCommand].pFunc(DriveLetter, TargetSector + NbBurstReadSectors, NbBurstReadSectors, false);
-        Delay = ((double)PerfCountEnd.QuadPart - (double)PerfCountStart.QuadPart) / (double)freq.QuadPart;
+        ClearCache();
+        auto result = Commands[ReadCommand].pFunc(TargetSector, NbBurstReadSectors, false); // init read
+        InitDelay = result.Duration;
+        result = Commands[ReadCommand].pFunc(TargetSector + NbBurstReadSectors, NbBurstReadSectors, false);
+        Delay = result.Duration;
         DEBUG("\n1) %d : %.2f ms / %d : %.2f ms", TargetSector, InitDelay, TargetSector + NbBurstReadSectors, Delay);
 
         // disable caching
-        if (!SetCacheRCDBit(DriveLetter,RCD_READ_CACHE_DISABLED))
+        if (!SetCacheRCDBit(RCD_READ_CACHE_DISABLED))
         {
             i = NbTests;
             break;
         }
 
         // second test : with cache disabled
-        ClearCache(DriveLetter);
-        Commands[ReadCommand].pFunc(DriveLetter, TargetSector, NbBurstReadSectors, false); // init read
-        InitDelay = ((double)PerfCountEnd.QuadPart - (double)PerfCountStart.QuadPart) / (double)freq.QuadPart;
-        Commands[ReadCommand].pFunc(DriveLetter, TargetSector + NbBurstReadSectors, NbBurstReadSectors, false);
-        Delay2 = ((double)PerfCountEnd.QuadPart - (double)PerfCountStart.QuadPart) / (double)freq.QuadPart;
+        ClearCache();
+        result = Commands[ReadCommand].pFunc(TargetSector, NbBurstReadSectors, false); // init read
+        InitDelay = result.Duration;
+        Commands[ReadCommand].pFunc(TargetSector + NbBurstReadSectors, NbBurstReadSectors, false);
+        Delay2 = result.Duration;
         DEBUG("\n2) %d : %.2f ms / %d : %.2f ms", TargetSector, InitDelay, TargetSector + NbBurstReadSectors, Delay2);
 
         // compare times
@@ -980,7 +874,7 @@ static int TestRCDBitWorks(char DriveLetter, int ReadCommand, long int TargetSec
 }
 
 // wrapper for TestRCDBit
-static int TestRCDBitWorksWrapper(char DriveLetter, long int TargetSector, int NbTests)
+static int TestRCDBitWorksWrapper(long int TargetSector, int NbTests)
 {
     int ValidReadCommand;
     int retval = -1;
@@ -992,7 +886,7 @@ static int TestRCDBitWorksWrapper(char DriveLetter, long int TargetSector, int N
             if (Commands[ValidReadCommand].Supported)
             {
                 DEBUG("\ninfo: using command %02Xh",Commands[ValidReadCommand].FuncByte);
-                retval = TestRCDBitWorks(DriveLetter, ValidReadCommand, TargetSector, NbTests);
+                retval = TestRCDBitWorks(ValidReadCommand, TargetSector, NbTests);
                 break;
             }
         }
@@ -1015,7 +909,7 @@ static int TestRCDBitWorksWrapper(char DriveLetter, long int TargetSector, int N
 // we will get a multiple of the cache line size and not the cache line size itself.
 //
 //--------------------------------------------------------------------------------------------------------
-static int TestCacheLineSize_Straight(char DriveLetter, unsigned char ReadCommand, long int TargetSector, int NbMeasures)
+static int TestCacheLineSize_Straight(unsigned char ReadCommand, long int TargetSector, int NbMeasures)
 {
     int i, TargetSectorOffset, CacheLineSize;
     int MaxCacheLineSize= 0;
@@ -1025,21 +919,21 @@ static int TestCacheLineSize_Straight(char DriveLetter, unsigned char ReadComman
            NbMeasures, CachedNonCachedSpeedFactor, NbBurstReadSectors, MaxCacheSectors);
     for (i=0; i<NbMeasures; i++)
     {
-        ClearCache(DriveLetter);
+        ClearCache();
         PreviousDelay = 50;
 
         // initial read. After this the drive's cache should be filled
         // with a number of sectors following this one.
-        Commands[ReadCommand].pFunc(DriveLetter, TargetSector, NbBurstReadSectors, false);
-        InitialDelay = ((double)PerfCountEnd.QuadPart - (double)PerfCountStart.QuadPart) / (double)freq.QuadPart;
+        auto result = Commands[ReadCommand].pFunc(TargetSector, NbBurstReadSectors, false);
+        InitialDelay = result.Duration;
         SUPERDEBUG("\n init %d: %f",TargetSector, InitialDelay);
 
         // read 1 sector at a time and time the reads until one takes more
         // than [CachedNonCachedSpeedFactor] times the delay taken by the previous read
         for (TargetSectorOffset = 0; TargetSectorOffset < MaxCacheSectors ; TargetSectorOffset += NbBurstReadSectors)
         {
-            Commands[ReadCommand].pFunc(DriveLetter, TargetSector + TargetSectorOffset, NbBurstReadSectors, false);
-            Delay = ((double)PerfCountEnd.QuadPart - (double)PerfCountStart.QuadPart) / (double)freq.QuadPart;
+            auto result = Commands[ReadCommand].pFunc(TargetSector + TargetSectorOffset, NbBurstReadSectors, false);
+            Delay = result.Duration;
             SUPERDEBUG("\n %d: %f",TargetSector + TargetSectorOffset,Delay);
 
             if (Delay >= (CachedNonCachedSpeedFactor * PreviousDelay))
@@ -1088,7 +982,7 @@ static int TestCacheLineSize_Straight(char DriveLetter, unsigned char ReadComman
 // the cache size.
 //
 //--------------------------------------------------------------------------------------------------------
-static int TestCacheLineSize_Wrap(char DriveLetter, unsigned char ReadCommand, long int TargetSector, int NbMeasures)
+static int TestCacheLineSize_Wrap(unsigned char ReadCommand, long int TargetSector, int NbMeasures)
 {
     int i, TargetSectorOffset, CacheLineSize;
     int MaxCacheLineSize= 0;
@@ -1098,15 +992,15 @@ static int TestCacheLineSize_Wrap(char DriveLetter, unsigned char ReadCommand, l
            NbMeasures, CachedNonCachedSpeedFactor, NbBurstReadSectors, MaxCacheSectors);
     for (i=0; i<NbMeasures; i++)
     {
-        ClearCache(DriveLetter);
+        ClearCache();
 
         // initial read. After this the drive's cache should be filled
         // with a number of sectors following this one.
-        Commands[ReadCommand].pFunc(DriveLetter, TargetSector, NbBurstReadSectors, false);
-        InitialDelay = ((double)PerfCountEnd.QuadPart - (double)PerfCountStart.QuadPart) / (double)freq.QuadPart;
+        auto result = Commands[ReadCommand].pFunc(TargetSector, NbBurstReadSectors, false);
+        InitialDelay = result.Duration;
         SUPERDEBUG("\n init %d: %f",TargetSector, InitialDelay);
-        Commands[ReadCommand].pFunc(DriveLetter, TargetSector, NbBurstReadSectors, false);
-        PreviousInitDelay = ((double)PerfCountEnd.QuadPart - (double)PerfCountStart.QuadPart) / (double)freq.QuadPart;
+        result = Commands[ReadCommand].pFunc(TargetSector, NbBurstReadSectors, false);
+        PreviousInitDelay = result.Duration;
         SUPERDEBUG("\n %d: %f",TargetSector, PreviousInitDelay);
 
         // read 1 sector forward and the initial sector. If the original sector takes more
@@ -1114,12 +1008,12 @@ static int TestCacheLineSize_Wrap(char DriveLetter, unsigned char ReadCommand, l
         // the initial sector, then we reached the limits of the cache
         for (TargetSectorOffset = 1; TargetSectorOffset < MaxCacheSectors ; TargetSectorOffset += NbBurstReadSectors)
         {
-            Commands[ReadCommand].pFunc(DriveLetter, TargetSector + TargetSectorOffset, NbBurstReadSectors, false);
-            Delay = ((double)PerfCountEnd.QuadPart - (double)PerfCountStart.QuadPart) / (double)freq.QuadPart;
+            result = Commands[ReadCommand].pFunc(TargetSector + TargetSectorOffset, NbBurstReadSectors, false);
+            Delay = result.Duration;
             SUPERDEBUG("\n %d: %f",TargetSector + TargetSectorOffset,Delay);
 
-            Commands[ReadCommand].pFunc(DriveLetter, TargetSector, NbBurstReadSectors, false);
-            Delay2 = ((double)PerfCountEnd.QuadPart - (double)PerfCountStart.QuadPart) / (double)freq.QuadPart;
+            result = Commands[ReadCommand].pFunc(TargetSector, NbBurstReadSectors, false);
+            Delay2 = result.Duration;
             SUPERDEBUG("\n %d: %f",TargetSector,Delay2);
 
             if (Delay2 >= (CachedNonCachedSpeedFactor * PreviousInitDelay))
@@ -1167,7 +1061,7 @@ static int TestCacheLineSize_Wrap(char DriveLetter, unsigned char ReadCommand, l
 // finds cache line size with a single long burst read of NbMeasures * BurstSize sectors,
 // then try to find the cache size with statistical calculations
 //--------------------------------------------------------------------------------------------------------
-static int TestCacheLineSize_Stat(char DriveLetter, unsigned char ReadCommand, long int TargetSector, int NbMeasures, int BurstSize)
+static int TestCacheLineSize_Stat(unsigned char ReadCommand, long int TargetSector, int NbMeasures, int BurstSize)
 {
     int i,j;
     int NbPeakMeasures;
@@ -1192,15 +1086,15 @@ static int TestCacheLineSize_Stat(char DriveLetter, unsigned char ReadCommand, l
     }
 
     // initial read.
-    ClearCache(DriveLetter);
-    Commands[ReadCommand].pFunc(DriveLetter, TargetSector, BurstSize, false);
-    Measures.push_back(((double)PerfCountEnd.QuadPart - (double)PerfCountStart.QuadPart) / (double)freq.QuadPart);
+    ClearCache();
+    auto result = Commands[ReadCommand].pFunc(TargetSector, BurstSize, false);
+    Measures.push_back(result.Duration);
 
     // fill in measures buffer
     for (i=1; i<NbMeasures; i++)
     {
-        Commands[ReadCommand].pFunc(DriveLetter, TargetSector + i*BurstSize, BurstSize, false);
-        Measures.push_back(((double)PerfCountEnd.QuadPart - (double)PerfCountStart.QuadPart) / (double)freq.QuadPart);
+        result = Commands[ReadCommand].pFunc(TargetSector + i*BurstSize, BurstSize, false);
+        Measures.push_back(result.Duration);
     }
 
     // find max time
@@ -1280,7 +1174,7 @@ static int TestCacheLineSize_Stat(char DriveLetter, unsigned char ReadCommand, l
 }
 
 // wrapper for TestCacheLineSize
-static int TestCacheLineSizeWrapper(char DriveLetter, long int TargetSector, int NbMeasures, int BurstSize, short method)
+static int TestCacheLineSizeWrapper(long int TargetSector, int NbMeasures, int BurstSize, short method)
 {
     int ValidReadCommand;
     int retval = -1;
@@ -1296,13 +1190,13 @@ static int TestCacheLineSizeWrapper(char DriveLetter, long int TargetSector, int
                 switch(method)
                 {
                 case 1:
-                    retval = TestCacheLineSize_Wrap(DriveLetter, ValidReadCommand, TargetSector, NbMeasures);
+                    retval = TestCacheLineSize_Wrap(ValidReadCommand, TargetSector, NbMeasures);
                     break;
                 case 2:
-                    retval = TestCacheLineSize_Straight(DriveLetter, ValidReadCommand, TargetSector, NbMeasures);
+                    retval = TestCacheLineSize_Straight(ValidReadCommand, TargetSector, NbMeasures);
                     break;
                 case 3:
-                    retval = TestCacheLineSize_Stat(DriveLetter, ValidReadCommand, TargetSector, NbMeasures, BurstSize);
+                    retval = TestCacheLineSize_Stat(ValidReadCommand, TargetSector, NbMeasures, BurstSize);
                     break;
                 default:
                     printf("\nError: invalid method !!\n");
@@ -1328,7 +1222,7 @@ static int TestCacheLineSizeWrapper(char DriveLetter, long int TargetSector, int
 // will reload the cache and it will be much slower than the one at N+2. To find out the number of cache
 // lines, we read multiple M sectors at various positions
 //--------------------------------------------------------------------------------------------------------
-static int TestCacheLineNumber(char DriveLetter, unsigned char ReadCommand, long int TargetSector, int NbMeasures)
+static int TestCacheLineNumber(unsigned char ReadCommand, long int TargetSector, int NbMeasures)
 {
     int i, j;
     int NbCacheLines = 1;
@@ -1343,23 +1237,23 @@ static int TestCacheLineNumber(char DriveLetter, unsigned char ReadCommand, long
 
     for (i=0; i<NbMeasures; i++)
     {
-        ClearCache(DriveLetter);
+        ClearCache();
         NbCacheLines = 1;
 
         // initial read. After this the drive's cache should be filled
         // with a number of sectors following this one.
-        Commands[ReadCommand].pFunc(DriveLetter, LocalTargetSector, 1, false);
-        PreviousDelay = ((double)PerfCountEnd.QuadPart - (double)PerfCountStart.QuadPart) / (double)freq.QuadPart;
+        auto result = Commands[ReadCommand].pFunc(LocalTargetSector, 1, false);
+        PreviousDelay = result.Duration;
         SUPERDEBUG("\n first read at %d: %.2f",LocalTargetSector ,PreviousDelay);
 
         for (j=1; j<MAX_CACHE_LINES; j++)
         {
             // second read to load another (?) cache line
-            Commands[ReadCommand].pFunc(DriveLetter, LocalTargetSector + 10000, 1, false);
+            Commands[ReadCommand].pFunc(LocalTargetSector + 10000, 1, false);
 
             // read 1 sector next to the original one
-            Commands[ReadCommand].pFunc(DriveLetter, LocalTargetSector + 2*j, 1, false);
-            Delay = ((double)PerfCountEnd.QuadPart - (double)PerfCountStart.QuadPart) / (double)freq.QuadPart;
+            result = Commands[ReadCommand].pFunc(LocalTargetSector + 2*j, 1, false);
+            Delay = result.Duration;
             SUPERDEBUG("\n read at %d: %.2f",LocalTargetSector + 2*j, Delay);
 
             if (DebugMode || SuperDebugMode)
@@ -1382,7 +1276,7 @@ static int TestCacheLineNumber(char DriveLetter, unsigned char ReadCommand, long
 }
 
 // wrapper for TestCacheLineNumber
-static int TestCacheLineNumberWrapper(char DriveLetter, long int TargetSector, int NbMeasures)
+static int TestCacheLineNumberWrapper(long int TargetSector, int NbMeasures)
 {
     int ValidReadCommand;
     int retval = -1;
@@ -1394,7 +1288,7 @@ static int TestCacheLineNumberWrapper(char DriveLetter, long int TargetSector, i
             if (Commands[ValidReadCommand].Supported)
             {
                 DEBUG("\ninfo: using command %02Xh",Commands[ValidReadCommand].FuncByte);
-                retval = TestCacheLineNumber(DriveLetter, ValidReadCommand, TargetSector, NbMeasures);
+                retval = TestCacheLineNumber( ValidReadCommand, TargetSector, NbMeasures);
                 break;
             }
         }
@@ -1412,7 +1306,7 @@ static int TestCacheLineNumberWrapper(char DriveLetter, long int TargetSector, i
 //
 // find size of cache invalidated by Plextor FUA command
 //--------------------------------------------------------------------------------------------------------
-static int TestPlextorFUAInvalidationSize(char DriveLetter, unsigned char ReadCommand, long int TargetSector, int NbMeasures)
+static int TestPlextorFUAInvalidationSize(unsigned char ReadCommand, long int TargetSector, int NbMeasures)
 {
 #define CACHE_TEST_BLOCK  20
 
@@ -1426,16 +1320,16 @@ static int TestPlextorFUAInvalidationSize(char DriveLetter, unsigned char ReadCo
     {
         for (TargetSectorOffset=2000; TargetSectorOffset>=0; TargetSectorOffset -= CACHE_TEST_BLOCK)
         {
-            ClearCache(DriveLetter);
+            ClearCache();
 
             // initial read of 1 sector. After this the drive's cache should be filled
             // with a number of sectors following this one.
-            Commands[ReadCommand].pFunc(DriveLetter, TargetSector, 1, false);
-            InitialDelay = ((double)PerfCountEnd.QuadPart - (double)PerfCountStart.QuadPart) / (double)freq.QuadPart;
+            auto result = Commands[ReadCommand].pFunc( TargetSector, 1, false);
+            InitialDelay = result.Duration;
             SUPERDEBUG("\n(%d) init = %.2f, thr = %.2f",i, InitialDelay, (double)(InitialDelay / CachedNonCachedSpeedFactor));
 
             // invalidate cache with Plextor FUA command
-            PlextorFUAFlush(DriveLetter, TargetSector);
+            PlextorFUAFlush( TargetSector);
 
             // now we should get this :
             //
@@ -1444,8 +1338,8 @@ static int TestPlextorFUAInvalidationSize(char DriveLetter, unsigned char ReadCo
             //                                        ^
             //                                        |
             // read sectors backwards to find this ---|  spot
-            Commands[ReadCommand].pFunc(DriveLetter, TargetSector + TargetSectorOffset, 1, false);
-            Delay = ((double)PerfCountEnd.QuadPart - (double)PerfCountStart.QuadPart) / (double)freq.QuadPart;
+            Commands[ReadCommand].pFunc( TargetSector + TargetSectorOffset, 1, false);
+            Delay = result.Duration;
             SUPERDEBUG(" (%d) %d: %.2f",i, TargetSector + TargetSectorOffset,Delay);
 
             if (Delay <= (InitialDelay / CachedNonCachedSpeedFactor))
@@ -1459,7 +1353,7 @@ static int TestPlextorFUAInvalidationSize(char DriveLetter, unsigned char ReadCo
 }
 
 // wrapper for TestPlextorFUAInvalidationSize
-static int TestPlextorFUAInvalidationSizeWrapper(char DriveLetter, long int TargetSector, int NbMeasures)
+static int TestPlextorFUAInvalidationSizeWrapper(long int TargetSector, int NbMeasures)
 {
     int ValidReadCommand;
     int retval = -1;
@@ -1471,7 +1365,7 @@ static int TestPlextorFUAInvalidationSizeWrapper(char DriveLetter, long int Targ
             if (Commands[ValidReadCommand].Supported)
             {
                 DEBUG("\ninfo: using command %02Xh",Commands[ValidReadCommand].FuncByte);
-                retval = TestPlextorFUAInvalidationSize(DriveLetter, ValidReadCommand, TargetSector, NbMeasures);
+                retval = TestPlextorFUAInvalidationSize( ValidReadCommand, TargetSector, NbMeasures);
                 break;
             }
         }
@@ -1484,11 +1378,11 @@ static int TestPlextorFUAInvalidationSizeWrapper(char DriveLetter, long int Targ
     return retval;
 }
 
-static bool TestRCDBitSupport(char DriveLetter, long int TargetSector)
+static bool TestRCDBitSupport(long int TargetSector)
 {
     bool retval = false;
-
-    if (ModeSense(DriveLetter, CACHING_MODE_PAGE, 0, 18))
+    auto result = ModeSense(CACHING_MODE_PAGE, 0, 18);
+    if (result.Valid)
     {
         retval = true;
     }
@@ -1510,16 +1404,16 @@ static bool TestRCDBitSupport(char DriveLetter, long int TargetSector)
 //   If these logical blocks are transferred successfully it shall return GOOD status
 //
 //--------------------------------------------------------------------------------------------------------
-static int TestCacheLineSizePrefetch(char DriveLetter, long int TargetSector)
+static int TestCacheLineSizePrefetch(long int TargetSector)
 {
     int NbSectors = 1;
 
-    Prefetch(DriveLetter, TargetSector, NbSectors);
-    while (sptd.ScsiStatus == SCSISTAT_CONDITION_MET)
+    auto result = Prefetch(TargetSector, NbSectors);
+    while (result.ScsiStatus == SCSISTAT_CONDITION_MET)
     {
-        Prefetch(DriveLetter, TargetSector, NbSectors++);
+        result = Prefetch(TargetSector, NbSectors++);
     }
-    if ((sptd.ScsiStatus == SCSISTAT_GOOD) && (NbSectors > 1))
+    if ((result.ScsiStatus == SCSISTAT_GOOD) && (NbSectors > 1))
     {
         printf("\n-> cache size = %d kB, %d sectors",(int)((NbSectors - 1)*2352/1024), NbSectors - 1);
     }
@@ -1527,7 +1421,7 @@ static int TestCacheLineSizePrefetch(char DriveLetter, long int TargetSector)
     {
         printf("\nError: this method does not seem to work on this drive");
     }
-    return(NbSectors - 1);
+    return NbSectors - 1;
 }
 
 /*
@@ -1707,8 +1601,6 @@ int main(int argc, char **argv)
     }
 
     // ------------ actual stuff --------------
-    std::vector<std::uint8_t> data_buf(NbBurstReadSectors * 2448);
-    DataBuf = data_buf.data();
 
     //
     // print drive info
@@ -1749,7 +1641,8 @@ int main(int argc, char **argv)
         {
             if (UserReadCommand == Commands[j].FuncByte)
             {
-                if (Commands[j].pFunc(DriveLetter, 10000, 1, false))
+                auto result = Commands[j].pFunc( 10000, 1, false);
+                if (result.Valid)
                 {
                     Commands[j].Supported = true;
                     ReadCommandsDetected = true;
@@ -1786,7 +1679,7 @@ int main(int argc, char **argv)
             {
                 printf("%dx\n",MaxReadSpeed);
             }
-            SetDriveSpeed(DriveLetter, MaxReadSpeed,0);
+            SetDriveSpeed( MaxReadSpeed,0);
         }
     }
 
@@ -1799,19 +1692,19 @@ int main(int argc, char **argv)
         SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_TIME_CRITICAL);
         if (SpinDriveFlag)
         {
-            SpinDrive(DriveLetter, NbSecsDriveSpin);
+            SpinDrive( NbSecsDriveSpin);
         }
 
-        if (TestPlextorFUACommand(DriveLetter, 1))
+        if (TestPlextorFUACommand( 1))
         {
             printf("\n[+] Plextor flush tests: ");
-            printf("%d/%d",TestPlextorFUACommandWorksWrapper(DriveLetter, 15000, Nbtests),Nbtests);
+            printf("%d/%d",TestPlextorFUACommandWorksWrapper( 15000, Nbtests),Nbtests);
 
             if (PFUAInvalidationSizeTest)
             {
                 // 4) Find the size of data invalidated  by Plextor FUA command
                 printf(TESTINGPLEXFUA2);
-                InvalidatedSectors = TestPlextorFUAInvalidationSizeWrapper(DriveLetter, 15000, 1);
+                InvalidatedSectors = TestPlextorFUAInvalidationSizeWrapper( 15000, 1);
                 DEBUG("\nresult: ");
                 if (InvalidatedSectors > 0)
                 {
@@ -1835,12 +1728,12 @@ int main(int argc, char **argv)
         SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_TIME_CRITICAL);
         if (SpinDriveFlag)
         {
-            SpinDrive(DriveLetter, NbSecsDriveSpin);
+            SpinDrive( NbSecsDriveSpin);
         }
 
         // SIZE : method 1
         printf(CACHELINESIZETEST2);
-        CacheLineSizeSectors = TestCacheLineSizeWrapper(DriveLetter, 15000, Nbtests, 0, 1);
+        CacheLineSizeSectors = TestCacheLineSizeWrapper( 15000, Nbtests, 0, 1);
 
         SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_NORMAL);
     }
@@ -1851,12 +1744,12 @@ int main(int argc, char **argv)
         SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_TIME_CRITICAL);
         if (SpinDriveFlag)
         {
-            SpinDrive(DriveLetter, NbSecsDriveSpin);
+            SpinDrive( NbSecsDriveSpin);
         }
 
         // SIZE : method 2
         printf(CACHELINESIZETEST,2);
-        CacheLineSizeSectors = TestCacheLineSizeWrapper(DriveLetter, 15000, Nbtests, 0, 2);
+        CacheLineSizeSectors = TestCacheLineSizeWrapper( 15000, Nbtests, 0, 2);
 
         SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_NORMAL);
     }
@@ -1867,12 +1760,12 @@ int main(int argc, char **argv)
         SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_TIME_CRITICAL);
         if (SpinDriveFlag)
         {
-            SpinDrive(DriveLetter, NbSecsDriveSpin);
+            SpinDrive( NbSecsDriveSpin);
         }
 
         // NUMBER
         printf(CACHELINENBTEST);
-        CacheLineNumbers = TestCacheLineNumberWrapper(DriveLetter, 15000, Nbtests);
+        CacheLineNumbers = TestCacheLineNumberWrapper( 15000, Nbtests);
         SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_NORMAL);
     }
 
@@ -1881,12 +1774,12 @@ int main(int argc, char **argv)
         SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_TIME_CRITICAL);
         if (SpinDriveFlag)
         {
-            SpinDrive(DriveLetter, NbSecsDriveSpin);
+            SpinDrive( NbSecsDriveSpin);
         }
 
         // SIZE : method 3 (STATS)
         printf(CACHELINESIZETEST,3);
-        MaxIndex = TestCacheLineSizeWrapper(DriveLetter, 15000, NbSectorsMethod2, NbBurstReadSectors, 3);
+        MaxIndex = TestCacheLineSizeWrapper( 15000, NbSectorsMethod2, NbBurstReadSectors, 3);
         SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_NORMAL);
     }
 
@@ -1894,7 +1787,7 @@ int main(int argc, char **argv)
     {
         // SIZE : method 4 (PREFETCH)
         printf(CACHELINESIZETEST,4);
-        TestCacheLineSizePrefetch(DriveLetter, 10000);
+        TestCacheLineSizePrefetch( 10000);
     }
 
     if (TestRCDBit)
@@ -1902,9 +1795,9 @@ int main(int argc, char **argv)
         printf("\n[+] Testing cache disabling: ");
 
         Nbtests = (Nbtests == 0) ? 3 : Nbtests;
-        if (TestRCDBitSupport(DriveLetter, 10000))
+        if (TestRCDBitSupport( 10000))
         {
-            if (TestRCDBitWorksWrapper(DriveLetter, 15000, Nbtests) > 0)
+            if (TestRCDBitWorksWrapper( 15000, Nbtests) > 0)
             {
                 printf("ok");
             }
@@ -1916,6 +1809,6 @@ int main(int argc, char **argv)
     }
 
     printf("\n");
-    CloseVolume(hVolume);
+    CloseHandle(hVolume);
     return 0;
 }
