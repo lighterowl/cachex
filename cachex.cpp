@@ -82,24 +82,24 @@
 #endif
 
 // global variables
-SCSI_PASS_THROUGH_DIRECT sptd;
-byte* DataBuf;
-int NbBurstReadSectors = 1;
-byte SenseBuf[255];
-LARGE_INTEGER PerfCountStart, PerfCountEnd;
-LARGE_INTEGER freq = {0};
-double Delay = 0, Delay2 = 0, InitDelay = 0;
-double AverageDelay = 0;
-int NbMeasures = 0;
-bool ReadCommandsDetected = FALSE;
-unsigned int UserReadCommand = 0;
-HANDLE hVolume;
-bool DebugMode = FALSE;
-bool SuperDebugMode = FALSE;
-double ThresholdRatioMethod2 = 0.9;
-int CachedNonCachedSpeedFactor = 4;
-int MaxCacheSectors = 1000;
-int PeakMeasuresIndexes[NBPEAKMEASURES];
+static SCSI_PASS_THROUGH_DIRECT sptd;
+static byte* DataBuf;
+static int NbBurstReadSectors = 1;
+static byte SenseBuf[255];
+static LARGE_INTEGER PerfCountStart, PerfCountEnd;
+static LARGE_INTEGER freq = {0};
+static double Delay = 0, Delay2 = 0, InitDelay = 0;
+static double AverageDelay = 0;
+static int NbMeasures = 0;
+static bool ReadCommandsDetected = FALSE;
+static unsigned int UserReadCommand = 0;
+static HANDLE hVolume;
+static bool DebugMode = FALSE;
+static bool SuperDebugMode = FALSE;
+static double ThresholdRatioMethod2 = 0.9;
+static int CachedNonCachedSpeedFactor = 4;
+static int MaxCacheSectors = 1000;
+static int PeakMeasuresIndexes[NBPEAKMEASURES];
 
 typedef struct
 {
@@ -107,7 +107,7 @@ typedef struct
     int frequency;
     short divider;
 } sDeltaArray;
-sDeltaArray DeltaArray[NBDELTA];
+static sDeltaArray DeltaArray[NBDELTA];
 
 static void MP_QueryPerformanceCounter(LARGE_INTEGER* lpCounter)
 {
@@ -374,9 +374,9 @@ static BOOL Read_D8h(char DriveLetter, long int TargetSector, int NbSectors, boo
 }
 
 // drive characteristics
-int CacheLineSizeSectors = 0;
-int CacheLineNumbers = 0;
-int NbCacheLines = 0;
+static int CacheLineSizeSectors = 0;
+static int CacheLineNumbers = 0;
+static int NbCacheLines = 0;
 
 typedef struct
 {
@@ -386,7 +386,8 @@ typedef struct
     bool FUAbitSupported;
 } sReadCommand;
 
-sReadCommand Commands[NB_READ_COMMANDS] = { {0xBE, &Read_BEh, FALSE, FALSE},
+static sReadCommand Commands[NB_READ_COMMANDS] = {
+    {0xBE, &Read_BEh, FALSE, FALSE},
     {0xA8, &Read_A8h, FALSE, TRUE},
     {0x28, &Read_28h, FALSE, TRUE},
     {0xD4, &Read_D4h, FALSE, TRUE},
@@ -398,8 +399,7 @@ sReadCommand Commands[NB_READ_COMMANDS] = { {0xBE, &Read_BEh, FALSE, FALSE},
 //------------------------------------------------- CODE -------------------------------------------------
 //--------------------------------------------------------------------------------------------------------
 
-
-BOOL PlextorFUAFlush(char DriveLetter, long int TargetSector)
+static BOOL PlextorFUAFlush(char DriveLetter, long int TargetSector)
 {
     BOOL retval;
 
@@ -436,8 +436,7 @@ BOOL PlextorFUAFlush(char DriveLetter, long int TargetSector)
     }
 }
 
-
-BOOL RequestSense(char DriveLetter)
+static BOOL RequestSense(char DriveLetter)
 {
     BOOL retval;
 
@@ -466,8 +465,7 @@ BOOL RequestSense(char DriveLetter)
     }
 }
 
-
-BOOL ModeSense(char DriveLetter, unsigned char PageCode, unsigned char SubPageCode, int size)
+static BOOL ModeSense(char DriveLetter, unsigned char PageCode, unsigned char SubPageCode, int size)
 {
     BOOL retval;
 
@@ -499,10 +497,9 @@ BOOL ModeSense(char DriveLetter, unsigned char PageCode, unsigned char SubPageCo
     }
 }
 
-
 // WARNING: this ModeSelect function should always be called just after a ModeSense call
 // because the Mode PArameter List is not rebuilt !
-BOOL ModeSelect(char DriveLetter, unsigned char PageCode, unsigned char SubPageCode, int size)
+static BOOL ModeSelect(char DriveLetter, unsigned char PageCode, unsigned char SubPageCode, int size)
 {
     BOOL retval;
 
@@ -534,8 +531,7 @@ BOOL ModeSelect(char DriveLetter, unsigned char PageCode, unsigned char SubPageC
     }
 }
 
-
-BOOL Prefetch(char DriveLetter, long int TargetSector, unsigned int NbSectors)
+static BOOL Prefetch(char DriveLetter, long int TargetSector, unsigned int NbSectors)
 {
     BOOL retval;
 
@@ -569,8 +565,7 @@ BOOL Prefetch(char DriveLetter, long int TargetSector, unsigned int NbSectors)
     }
 }
 
-
-HANDLE OpenVolume(char DriveLetter)
+static HANDLE OpenVolume(char DriveLetter)
 {
     HANDLE hVolume;
     UINT uDriveType;
@@ -612,8 +607,7 @@ HANDLE OpenVolume(char DriveLetter)
     return hVolume;
 }
 
-
-BOOL CloseVolume(HANDLE hVolume)
+static BOOL CloseVolume(HANDLE hVolume)
 {
     return CloseHandle(hVolume);
 }
@@ -636,7 +630,7 @@ static void PrintIDString(unsigned char* dataChars, int dataLength)
     }
 }
 
-BOOL PrintDriveInfo(char DriveLetter)
+static BOOL PrintDriveInfo(char DriveLetter)
 {
     BOOL retval;
 
@@ -671,12 +665,11 @@ BOOL PrintDriveInfo(char DriveLetter)
     }
 }
 
-
 // BOOL ClearCache()
 //
 // fills the cache by reading backwards several areas at the beginning of the disc
 //
-BOOL ClearCache(char DriveLetter)
+static BOOL ClearCache(char DriveLetter)
 {
     int i,j;
     BOOL retval = FALSE;
@@ -697,8 +690,7 @@ BOOL ClearCache(char DriveLetter)
 
 }
 
-
-BOOL SpinDrive(char DriveLetter, unsigned int Seconds)
+static BOOL SpinDrive(char DriveLetter, unsigned int Seconds)
 {
     BOOL retval = FALSE;
     int i = 0, j=0;
@@ -725,8 +717,7 @@ BOOL SpinDrive(char DriveLetter, unsigned int Seconds)
     return(retval);
 }
 
-
-BOOL SetDriveSpeed(char DriveLetter, unsigned char ReadSpeedX, unsigned char WriteSpeedX)
+static BOOL SetDriveSpeed(char DriveLetter, unsigned char ReadSpeedX, unsigned char WriteSpeedX)
 {
     BOOL retval = FALSE;
     unsigned int ReadSpeedkB  = (ReadSpeedX  * 176) + 2;  // 1x CD = 176kB/s
@@ -760,7 +751,7 @@ BOOL SetDriveSpeed(char DriveLetter, unsigned char ReadSpeedX, unsigned char Wri
     }
 }
 
-void ShowCacheValues(char DriveLetter)
+static void ShowCacheValues(char DriveLetter)
 {
     if (ModeSense(DriveLetter, CD_DVD_CAPABILITIES_PAGE, 0, 32))
     {
@@ -782,8 +773,7 @@ void ShowCacheValues(char DriveLetter)
     }
 }
 
-
-BOOL SetCacheRCDBit(char DriveLetter, BOOL RCDBitValue)
+static BOOL SetCacheRCDBit(char DriveLetter, BOOL RCDBitValue)
 {
     BOOL retval = FALSE;
 
@@ -823,7 +813,7 @@ BOOL SetCacheRCDBit(char DriveLetter, BOOL RCDBitValue)
 // test and display which read commands are supported by the current drive
 // and if any of these commands supports the FUA bit
 //--------------------------------------------------------------------------------------------------------
-void TestSupportedReadCommands(char DriveLetter)
+static void TestSupportedReadCommands(char DriveLetter)
 {
     int i;
 
@@ -861,7 +851,7 @@ void TestSupportedReadCommands(char DriveLetter)
 // TestPlextorFUACommand
 //
 // test if Plextor's flushing command is supported
-bool TestPlextorFUACommand(char DriveLetter, int NbIterations)
+static bool TestPlextorFUACommand(char DriveLetter, int NbIterations)
 {
     printf(TESTINGPLEXFUA);
     if (!PlextorFUAFlush(DriveLetter, 100000))
@@ -882,7 +872,7 @@ bool TestPlextorFUACommand(char DriveLetter, int NbIterations)
 // TestPlextorFUACommandWorks
 //
 // test if Plextor's flushing command actually works
-int TestPlextorFUACommandWorks(char DriveLetter, int ReadCommand, long int TargetSector, int NbTests)
+static int TestPlextorFUACommandWorks(char DriveLetter, int ReadCommand, long int TargetSector, int NbTests)
 {
     int i;
     int InvalidationSuccess = 0;
@@ -919,9 +909,8 @@ int TestPlextorFUACommandWorks(char DriveLetter, int ReadCommand, long int Targe
     return(InvalidationSuccess);
 }
 
-
 // wrapper for TestPlextorFUACommandWorks
-int TestPlextorFUACommandWorksWrapper(char DriveLetter, long int TargetSector, int NbTests)
+static int TestPlextorFUACommandWorksWrapper(char DriveLetter, long int TargetSector, int NbTests)
 {
     int ValidReadCommand;
     int retval = 0;
@@ -946,11 +935,10 @@ int TestPlextorFUACommandWorksWrapper(char DriveLetter, long int TargetSector, i
     return retval;
 }
 
-
 //
 // TimeMultipleReads
 //
-void TimeMultipleReads(char DriveLetter, unsigned char ReadCommand, long int TargetSector, int NbReads, bool FUAbit)
+static void TimeMultipleReads(char DriveLetter, unsigned char ReadCommand, long int TargetSector, int NbReads, bool FUAbit)
 {
     int i = 0;
 
@@ -968,7 +956,7 @@ void TimeMultipleReads(char DriveLetter, unsigned char ReadCommand, long int Tar
 // TestCacheSpeedImpact
 //
 // compare reading times with FUA bit (to disc) and without FUA (from cache)
-void TestCacheSpeedImpact(char DriveLetter, long int TargetSector, int NbReads)
+static void TestCacheSpeedImpact(char DriveLetter, long int TargetSector, int NbReads)
 {
     int i;
 
@@ -993,7 +981,7 @@ void TestCacheSpeedImpact(char DriveLetter, long int TargetSector, int NbReads)
 // TestRCDBitWorks
 //
 // test if cache can be disabled via RCD bit
-int TestRCDBitWorks(char DriveLetter, int ReadCommand, long int TargetSector, int NbTests)
+static int TestRCDBitWorks(char DriveLetter, int ReadCommand, long int TargetSector, int NbTests)
 {
     int i;
     int InvalidationSuccess = 0;
@@ -1043,7 +1031,7 @@ int TestRCDBitWorks(char DriveLetter, int ReadCommand, long int TargetSector, in
 }
 
 // wrapper for TestRCDBit
-int TestRCDBitWorksWrapper(char DriveLetter, long int TargetSector, int NbTests)
+static int TestRCDBitWorksWrapper(char DriveLetter, long int TargetSector, int NbTests)
 {
     int ValidReadCommand;
     int retval = -1;
@@ -1068,8 +1056,6 @@ int TestRCDBitWorksWrapper(char DriveLetter, long int TargetSector, int NbTests)
     return retval;
 }
 
-
-
 //--------------------------------------------------------------------------------------------------------
 // TestCacheLineSize_Straight  (METHOD 1 : STRAIGHT)
 //
@@ -1080,7 +1066,7 @@ int TestRCDBitWorksWrapper(char DriveLetter, long int TargetSector, int NbTests)
 // we will get a multiple of the cache line size and not the cache line size itself.
 //
 //--------------------------------------------------------------------------------------------------------
-int TestCacheLineSize_Straight(char DriveLetter, unsigned char ReadCommand, long int TargetSector, int NbMeasures)
+static int TestCacheLineSize_Straight(char DriveLetter, unsigned char ReadCommand, long int TargetSector, int NbMeasures)
 {
     int i, TargetSectorOffset, CacheLineSize;
     int MaxCacheLineSize= 0;
@@ -1137,7 +1123,6 @@ int TestCacheLineSize_Straight(char DriveLetter, unsigned char ReadCommand, long
     return MaxCacheLineSize;
 }
 
-
 //--------------------------------------------------------------------------------------------------------
 // TestCacheLineSize_Wrap  (METHOD 2 : WRAPAROUND)
 //
@@ -1154,7 +1139,7 @@ int TestCacheLineSize_Straight(char DriveLetter, unsigned char ReadCommand, long
 // the cache size.
 //
 //--------------------------------------------------------------------------------------------------------
-int TestCacheLineSize_Wrap(char DriveLetter, unsigned char ReadCommand, long int TargetSector, int NbMeasures)
+static int TestCacheLineSize_Wrap(char DriveLetter, unsigned char ReadCommand, long int TargetSector, int NbMeasures)
 {
     int i, TargetSectorOffset, CacheLineSize;
     int MaxCacheLineSize= 0;
@@ -1357,7 +1342,7 @@ static int TestCacheLineSize_Stat(char DriveLetter, unsigned char ReadCommand, l
 }
 
 // wrapper for TestCacheLineSize
-int TestCacheLineSizeWrapper(char DriveLetter, long int TargetSector, int NbMeasures, int BurstSize, short method)
+static int TestCacheLineSizeWrapper(char DriveLetter, long int TargetSector, int NbMeasures, int BurstSize, short method)
 {
     int ValidReadCommand;
     int retval = -1;
@@ -1396,7 +1381,6 @@ int TestCacheLineSizeWrapper(char DriveLetter, long int TargetSector, int NbMeas
     return retval;
 }
 
-
 //--------------------------------------------------------------------------------------------------------
 // TestCacheLineNumber
 //
@@ -1406,7 +1390,7 @@ int TestCacheLineSizeWrapper(char DriveLetter, long int TargetSector, int NbMeas
 // will reload the cache and it will be much slower than the one at N+2. To find out the number of cache
 // lines, we read multiple M sectors at various positions
 //--------------------------------------------------------------------------------------------------------
-int TestCacheLineNumber(char DriveLetter, unsigned char ReadCommand, long int TargetSector, int NbMeasures)
+static int TestCacheLineNumber(char DriveLetter, unsigned char ReadCommand, long int TargetSector, int NbMeasures)
 {
     int i, j;
     int NbCacheLines = 1;
@@ -1460,7 +1444,7 @@ int TestCacheLineNumber(char DriveLetter, unsigned char ReadCommand, long int Ta
 }
 
 // wrapper for TestCacheLineNumber
-int TestCacheLineNumberWrapper(char DriveLetter, long int TargetSector, int NbMeasures)
+static int TestCacheLineNumberWrapper(char DriveLetter, long int TargetSector, int NbMeasures)
 {
     int ValidReadCommand;
     int retval = -1;
@@ -1485,13 +1469,12 @@ int TestCacheLineNumberWrapper(char DriveLetter, long int TargetSector, int NbMe
     return retval;
 }
 
-
 //--------------------------------------------------------------------------------------------------------
 // TestPlextorFUAInvalidationSize
 //
 // find size of cache invalidated by Plextor FUA command
 //--------------------------------------------------------------------------------------------------------
-int TestPlextorFUAInvalidationSize(char DriveLetter, unsigned char ReadCommand, long int TargetSector, int NbMeasures)
+static int TestPlextorFUAInvalidationSize(char DriveLetter, unsigned char ReadCommand, long int TargetSector, int NbMeasures)
 {
 #define CACHE_TEST_BLOCK  20
 
@@ -1537,9 +1520,8 @@ int TestPlextorFUAInvalidationSize(char DriveLetter, unsigned char ReadCommand, 
     return (InvalidatedSize - CACHE_TEST_BLOCK);
 }
 
-
 // wrapper for TestPlextorFUAInvalidationSize
-int TestPlextorFUAInvalidationSizeWrapper(char DriveLetter, long int TargetSector, int NbMeasures)
+static int TestPlextorFUAInvalidationSizeWrapper(char DriveLetter, long int TargetSector, int NbMeasures)
 {
     int ValidReadCommand;
     int retval = -1;
@@ -1564,7 +1546,7 @@ int TestPlextorFUAInvalidationSizeWrapper(char DriveLetter, long int TargetSecto
     return retval;
 }
 
-BOOL TestRCDBitSupport(char DriveLetter, long int TargetSector)
+static BOOL TestRCDBitSupport(char DriveLetter, long int TargetSector)
 {
     BOOL retval = FALSE;
 
@@ -1579,9 +1561,6 @@ BOOL TestRCDBitSupport(char DriveLetter, long int TargetSector)
     return(retval);
 }
 
-
-
-
 //--------------------------------------------------------------------------------------------------------
 // TestCacheLineSizePrefetch
 //
@@ -1593,7 +1572,7 @@ BOOL TestRCDBitSupport(char DriveLetter, long int TargetSector)
 //   If these logical blocks are transferred successfully it shall return GOOD status
 //
 //--------------------------------------------------------------------------------------------------------
-int TestCacheLineSizePrefetch(char DriveLetter, long int TargetSector)
+static int TestCacheLineSizePrefetch(char DriveLetter, long int TargetSector)
 {
     int NbSectors = 1;
 
@@ -1627,7 +1606,7 @@ commands
 
 */
 
-void PrintUsage()
+static void PrintUsage()
 {
     printf("\nUsage:   cachex <commands> <options> <drive letter>\n");
     printf("\nCommands:  -i     : show drive info\n");
@@ -1649,11 +1628,10 @@ void PrintUsage()
     printf("           -n xx  : perform xx tests\n");
 }
 
-
 //--------------------------------------------------------------------------------------------------------
 //------------------------------------------ MAIN MAIN MAIN MAIN -----------------------------------------
 //--------------------------------------------------------------------------------------------------------
-int main(int argc, char * argv[])
+int main(int argc, char **argv)
 {
     char DriveLetter = 'a';
     int MaxIndex, i, j, v;
