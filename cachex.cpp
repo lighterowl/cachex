@@ -1,18 +1,48 @@
 /***********************************************************************************************
   CacheExplorer 0.9   spath@cdfreaks.com  2006/xx
 /***********************************************************************************************/
-#include <windows.h>
-#include <winioctl.h>
-#include <ntddscsi.h>
-#define _NTSCSI_USER_MODE_
-#include <scsi.h>
-
 #include <cstdint>
 #include <cstdio>
 
 #include <array>
 #include <vector>
 #include <algorithm>
+
+#define SCSISTAT_GOOD                  0x00
+#define SCSISTAT_CHECK_CONDITION       0x02
+#define SCSISTAT_CONDITION_MET         0x04
+#define SCSISTAT_BUSY                  0x08
+#define SCSISTAT_INTERMEDIATE          0x10
+#define SCSISTAT_INTERMEDIATE_COND_MET 0x14
+#define SCSISTAT_RESERVATION_CONFLICT  0x18
+#define SCSISTAT_COMMAND_TERMINATED    0x22
+#define SCSISTAT_QUEUE_FULL            0x28
+
+struct CommandResult {
+  CommandResult(unsigned int NumOutBytes):Valid(false), Duration(0.0), ScsiStatus(0xff), Data(NumOutBytes) {}
+
+  bool Valid;
+  double Duration;
+  std::uint8_t ScsiStatus;
+  std::vector<std::uint8_t> Data;
+};
+
+#ifdef _WIN32
+#include "cachex_win.h"
+#else
+struct platform {
+  typedef int device_handle;
+  static device_handle open_volume(char DriveLetter) { return 0; }
+  static bool handle_is_valid(device_handle h) { return false; }
+  static void close_handle(device_handle h) {}
+  static std::uint32_t monotonic_clock() { static std::uint32_t val = 0; return val++; }
+  static void set_critical_priority() {}
+  static void set_normal_priority() {}
+
+  template<std::size_t CDBLength>
+  static void exec_command(CommandResult& rv, const std::array<std::uint8_t, CDBLength> &cdb) {}
+};
+#endif
 
 //#define RELEASE_VERSION
 #undef RELEASE_VERSION
@@ -94,7 +124,7 @@ static double AverageDelay = 0;
 static int NbMeasures = 0;
 static bool ReadCommandsDetected = false;
 static unsigned int UserReadCommand = 0;
-static HANDLE hVolume;
+static platform::device_handle hVolume;
 static bool DebugMode = false;
 static bool SuperDebugMode = false;
 static double ThresholdRatioMethod2 = 0.9;
@@ -109,15 +139,6 @@ typedef struct
     short divider;
 } sDeltaArray;
 static sDeltaArray DeltaArray[NBDELTA];
-
-static void MP_QueryPerformanceCounter(LARGE_INTEGER* lpCounter)
-{
-    HANDLE hCurThread = GetCurrentThread();
-    unsigned long dwOldMask = SetThreadAffinityMask(hCurThread, 1);
-
-    QueryPerformanceCounter(lpCounter);
-    SetThreadAffinityMask(hCurThread, dwOldMask);
-}
 
 namespace Command {
   std::array<std::uint8_t, 12> Read_A8h(long int TargetSector, int NbSectors, bool FUAbit) {
@@ -318,53 +339,9 @@ namespace Command {
   }
 }
 
-struct CommandResult {
-  CommandResult(unsigned int NumOutBytes):Valid(false), Duration(0.0), ScsiStatus(0xff), Data(NumOutBytes) {}
-
-  bool Valid;
-  double Duration;
-  std::uint8_t ScsiStatus;
-  std::vector<std::uint8_t> Data;
-};
-
-static LARGE_INTEGER init_qpc_freq() {
-    LARGE_INTEGER freq;
-    QueryPerformanceFrequency(&freq);
-    freq.QuadPart /= 1000;
-    return freq;
-}
-
 template<std::size_t CDBLength>
 static void ExecCommand(CommandResult& rv, const std::array<std::uint8_t, CDBLength> &cdb) {
-  SCSI_PASS_THROUGH_DIRECT sptd;
-  sptd.Length             = sizeof(sptd);
-  sptd.PathId             = 0;                  // SCSI card ID will be filled in automatically
-  sptd.TargetId           = 0;                  // SCSI target ID will also be filled in
-  sptd.Lun                = 0;                  // SCSI lun ID will also be filled in
-  sptd.CdbLength          = CDBLength;          // CDB size
-  sptd.SenseInfoLength    = 0;                  // Don't return any sense data
-  sptd.DataIn             = SCSI_IOCTL_DATA_IN; // There will be data from drive
-  sptd.DataTransferLength = rv.Data.size();     // Size of data
-  sptd.TimeOutValue       = 60;                 // SCSI timeout value
-  sptd.DataBuffer         = rv.Data.data();
-  sptd.SenseInfoOffset    = 0;
-  std::copy(std::begin(cdb), std::end(cdb), sptd.Cdb);
-
-  LARGE_INTEGER PerfCountStart, PerfCountEnd;
-  static const LARGE_INTEGER freq = init_qpc_freq();
-  DWORD dwBytesReturned;
-
-  MP_QueryPerformanceCounter(&PerfCountStart);
-  auto io_ok = DeviceIoControl(hVolume,IOCTL_SCSI_PASS_THROUGH_DIRECT,&sptd,
-                            sizeof(SCSI_PASS_THROUGH_DIRECT), NULL, 0, &dwBytesReturned,NULL);
-  MP_QueryPerformanceCounter(&PerfCountEnd);
-
-  rv.Valid = io_ok ? true : false;
-  // FIXME the subtraction should be done on integers and its result divided by the frequency in order
-  // to produce a double, but I'm keeping it untouched.
-  rv.Duration = ((double)PerfCountEnd.QuadPart - (double)PerfCountStart.QuadPart) / (double)freq.QuadPart;
-  rv.Data.resize(sptd.DataTransferLength);
-  rv.ScsiStatus = sptd.ScsiStatus;
+  platform::exec_command(rv, cdb);
 }
 
 template<std::size_t CDBLength>
@@ -471,48 +448,6 @@ static CommandResult Prefetch(long int TargetSector, unsigned int NbSectors)
     return ExecBytesCommand(18, Command::Prefetch(TargetSector, NbSectors));
 }
 
-static HANDLE OpenVolume(char DriveLetter)
-{
-    HANDLE hVolume;
-    UINT uDriveType;
-    char szVolumeName[8];
-    char szRootName[5];
-    DWORD dwAccessFlags;
-
-    szRootName[0]=DriveLetter;
-    szRootName[1]=':';
-    szRootName[2]='\\';
-    szRootName[3]='\0';
-
-    uDriveType = GetDriveType(szRootName);
-
-    switch(uDriveType) {
-    case DRIVE_CDROM:
-        dwAccessFlags = GENERIC_READ | GENERIC_WRITE;
-        break;
-
-    default:
-        printf("\nError: invalid drive type\n");
-        return INVALID_HANDLE_VALUE;
-    }
-
-    szVolumeName[0]='\\';
-    szVolumeName[1]='\\';
-    szVolumeName[2]='.';
-    szVolumeName[3]='\\';
-    szVolumeName[4]=DriveLetter;
-    szVolumeName[5]=':';
-    szVolumeName[6]='\0';
-
-    hVolume = CreateFile( szVolumeName, dwAccessFlags, FILE_SHARE_READ | FILE_SHARE_WRITE,
-                          NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL );
-
-    if (hVolume == INVALID_HANDLE_VALUE)
-        printf("\nError: invalid handle");
-
-    return hVolume;
-}
-
 static void PrintIDString(unsigned char* dataChars, int dataLength)
 {
     if (dataChars != NULL)
@@ -575,7 +510,6 @@ static bool SpinDrive(unsigned int Seconds)
 {
     bool retval = false;
     int i = 0, j=0;
-    DWORD TimeStart;
 
     for (i=0 ; i<NB_READ_COMMANDS ; i++)
     {
@@ -589,8 +523,8 @@ static bool SpinDrive(unsigned int Seconds)
     if (retval)
     {
         DEBUG(SPINNINGDRIVE);
-        TimeStart = GetTickCount();
-        while( GetTickCount() - TimeStart <= (unsigned long)(Seconds * 1000) )
+        auto TimeStart = platform::monotonic_clock();
+        while( platform::monotonic_clock() - TimeStart <= (unsigned long)(Seconds * 1000) )
         {
             Commands[i].pFunc((10000+(j++))%50000, 1, false);
         }
@@ -1609,8 +1543,8 @@ int main(int argc, char **argv)
     //
     // print drive info
     //
-    hVolume = OpenVolume(DriveLetter);
-    if (hVolume == INVALID_HANDLE_VALUE)
+    hVolume = platform::open_volume(DriveLetter);
+    if (!platform::handle_is_valid(hVolume))
     {
         return(-1);
     }
@@ -1693,7 +1627,7 @@ int main(int argc, char **argv)
     if (TestPlextorFUA)
     {
         Nbtests = (Nbtests == 0) ? 5 : Nbtests;
-        SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_TIME_CRITICAL);
+        platform::set_critical_priority();
         if (SpinDriveFlag)
         {
             SpinDrive( NbSecsDriveSpin);
@@ -1720,7 +1654,7 @@ int main(int argc, char **argv)
                 }
             }
         }
-        SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_NORMAL);
+        platform::set_normal_priority();
     }
 
     //
@@ -1729,7 +1663,7 @@ int main(int argc, char **argv)
     if (CacheMethod1)
     {
         Nbtests = (Nbtests == 0) ? 10 : Nbtests;
-        SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_TIME_CRITICAL);
+        platform::set_critical_priority();
         if (SpinDriveFlag)
         {
             SpinDrive( NbSecsDriveSpin);
@@ -1739,13 +1673,13 @@ int main(int argc, char **argv)
         printf(CACHELINESIZETEST2);
         CacheLineSizeSectors = TestCacheLineSizeWrapper( 15000, Nbtests, 0, 1);
 
-        SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_NORMAL);
+        platform::set_normal_priority();
     }
 
     if (CacheMethod2)
     {
         Nbtests = (Nbtests == 0) ? 20 : Nbtests;
-        SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_TIME_CRITICAL);
+        platform::set_critical_priority();
         if (SpinDriveFlag)
         {
             SpinDrive( NbSecsDriveSpin);
@@ -1755,13 +1689,13 @@ int main(int argc, char **argv)
         printf(CACHELINESIZETEST,2);
         CacheLineSizeSectors = TestCacheLineSizeWrapper( 15000, Nbtests, 0, 2);
 
-        SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_NORMAL);
+        platform::set_normal_priority();
     }
 
     if (CacheNbTest)
     {
         Nbtests = (Nbtests == 0) ? 5 : Nbtests;
-        SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_TIME_CRITICAL);
+        platform::set_critical_priority();
         if (SpinDriveFlag)
         {
             SpinDrive( NbSecsDriveSpin);
@@ -1770,12 +1704,12 @@ int main(int argc, char **argv)
         // NUMBER
         printf(CACHELINENBTEST);
         CacheLineNumbers = TestCacheLineNumberWrapper( 15000, Nbtests);
-        SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_NORMAL);
+        platform::set_normal_priority();
     }
 
     if (CacheMethod3)
     {
-        SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_TIME_CRITICAL);
+        platform::set_critical_priority();
         if (SpinDriveFlag)
         {
             SpinDrive( NbSecsDriveSpin);
@@ -1784,7 +1718,7 @@ int main(int argc, char **argv)
         // SIZE : method 3 (STATS)
         printf(CACHELINESIZETEST,3);
         MaxIndex = TestCacheLineSizeWrapper( 15000, NbSectorsMethod2, NbBurstReadSectors, 3);
-        SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_NORMAL);
+        platform::set_normal_priority();
     }
 
     if (CacheMethod4)
@@ -1813,6 +1747,6 @@ int main(int argc, char **argv)
     }
 
     printf("\n");
-    CloseHandle(hVolume);
+    platform::close_handle(hVolume);
     return 0;
 }
