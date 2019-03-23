@@ -3,10 +3,12 @@
 /***********************************************************************************************/
 #include <windows.h>
 #include <winioctl.h>
-#include <stdio.h>
 #include <ntddscsi.h>
 #define _NTSCSI_USER_MODE_
 #include <scsi.h>
+
+#include <cstdint>
+#include <cstdio>
 
 //#define RELEASE_VERSION
 #undef RELEASE_VERSION
@@ -83,9 +85,9 @@
 
 // global variables
 static SCSI_PASS_THROUGH_DIRECT sptd;
-static byte* DataBuf;
+static uint8_t* DataBuf;
 static int NbBurstReadSectors = 1;
-static byte SenseBuf[255];
+static uint8_t SenseBuf[255];
 static LARGE_INTEGER PerfCountStart, PerfCountEnd;
 static LARGE_INTEGER freq = {0};
 static double Delay = 0, Delay2 = 0, InitDelay = 0;
@@ -158,14 +160,14 @@ static BOOL Read_A8h(char DriveLetter, long int TargetSector, int NbSectors, boo
     ClearCDB();
     sptd.Cdb[0]  = 0xA8;
     sptd.Cdb[1]  = (FUAbit << 3);
-    sptd.Cdb[2]  = byte((TargetSector>>24)&0xFF); // msb
-    sptd.Cdb[3]  = byte((TargetSector>>16)&0xFF);
-    sptd.Cdb[4]  = byte((TargetSector>>8)&0xFF);
-    sptd.Cdb[5]  = byte((TargetSector)&0xFF);     // lsb
-    sptd.Cdb[6]  = byte((NbSectors>>24)&0xFF);    // msb
-    sptd.Cdb[7]  = byte((NbSectors>>16)&0xFF);
-    sptd.Cdb[8]  = byte((NbSectors>>8)&0xFF);
-    sptd.Cdb[9]  = byte((NbSectors)&0xFF);        // lsb
+    sptd.Cdb[2]  = uint8_t((TargetSector>>24)&0xFF); // msb
+    sptd.Cdb[3]  = uint8_t((TargetSector>>16)&0xFF);
+    sptd.Cdb[4]  = uint8_t((TargetSector>>8)&0xFF);
+    sptd.Cdb[5]  = uint8_t((TargetSector)&0xFF);     // lsb
+    sptd.Cdb[6]  = uint8_t((NbSectors>>24)&0xFF);    // msb
+    sptd.Cdb[7]  = uint8_t((NbSectors>>16)&0xFF);
+    sptd.Cdb[8]  = uint8_t((NbSectors>>8)&0xFF);
+    sptd.Cdb[9]  = uint8_t((NbSectors)&0xFF);        // lsb
 
     // send command
     MP_QueryPerformanceCounter(&PerfCountStart);
@@ -187,12 +189,12 @@ static BOOL Read_28h(char DriveLetter, long int TargetSector, int NbSectors, boo
     ClearCDB();
     sptd.Cdb[0]  = 0x28;
     sptd.Cdb[1]  = (FUAbit << 3);
-    sptd.Cdb[2]  = byte((TargetSector>>24)&0xFF); // msb
-    sptd.Cdb[3]  = byte((TargetSector>>16)&0xFF);
-    sptd.Cdb[4]  = byte((TargetSector>>8)&0xFF);
-    sptd.Cdb[5]  = byte((TargetSector)&0xFF);     // lsb
-    sptd.Cdb[7]  = byte((NbSectors>>8)&0xFF);     // msb
-    sptd.Cdb[8]  = byte((NbSectors)&0xFF);        // lsb
+    sptd.Cdb[2]  = uint8_t((TargetSector>>24)&0xFF); // msb
+    sptd.Cdb[3]  = uint8_t((TargetSector>>16)&0xFF);
+    sptd.Cdb[4]  = uint8_t((TargetSector>>8)&0xFF);
+    sptd.Cdb[5]  = uint8_t((TargetSector)&0xFF);     // lsb
+    sptd.Cdb[7]  = uint8_t((NbSectors>>8)&0xFF);     // msb
+    sptd.Cdb[8]  = uint8_t((NbSectors)&0xFF);        // lsb
 
     // send command
     MP_QueryPerformanceCounter(&PerfCountStart);
@@ -214,13 +216,13 @@ static BOOL Read_BEh(char DriveLetter, long int TargetSector, int NbSectors, boo
     ClearCDB();
     sptd.Cdb[0]  = 0xBE;
     sptd.Cdb[1]  = 0x00;                          // 0x04 = audio data only, 0x00 = any type
-    sptd.Cdb[2]  = byte((TargetSector>>24)&0xFF); // address
-    sptd.Cdb[3]  = byte((TargetSector>>16)&0xFF);
-    sptd.Cdb[4]  = byte((TargetSector>>8)&0xFF);
-    sptd.Cdb[5]  = byte((TargetSector)&0xFF);
-    sptd.Cdb[6]  = byte((NbSectors>>16)&0xFF);    // size
-    sptd.Cdb[7]  = byte((NbSectors>>8)&0xFF);
-    sptd.Cdb[8]  = byte((NbSectors)&0xFF);
+    sptd.Cdb[2]  = uint8_t((TargetSector>>24)&0xFF); // address
+    sptd.Cdb[3]  = uint8_t((TargetSector>>16)&0xFF);
+    sptd.Cdb[4]  = uint8_t((TargetSector>>8)&0xFF);
+    sptd.Cdb[5]  = uint8_t((TargetSector)&0xFF);
+    sptd.Cdb[6]  = uint8_t((NbSectors>>16)&0xFF);    // size
+    sptd.Cdb[7]  = uint8_t((NbSectors>>8)&0xFF);
+    sptd.Cdb[8]  = uint8_t((NbSectors)&0xFF);
     sptd.Cdb[9]  = 0x10;                          // just data
     sptd.Cdb[10] = 0;                             // no subcode
 
@@ -244,13 +246,13 @@ static BOOL Read_D4h(char DriveLetter, long int TargetSector, int NbSectors, boo
     ClearCDB();
     sptd.Cdb[0]  = 0xD4;
     sptd.Cdb[1]  = (FUAbit << 3);
-    sptd.Cdb[2]  = byte((TargetSector>>24)&0xFF); // msb
-    sptd.Cdb[3]  = byte((TargetSector>>16)&0xFF);
-    sptd.Cdb[4]  = byte((TargetSector>>8)&0xFF);
-    sptd.Cdb[5]  = byte((TargetSector)&0xFF);     // lsb
-    sptd.Cdb[6]  = byte((NbSectors>>16)&0xFF);
-    sptd.Cdb[7]  = byte((NbSectors>>8)&0xFF);
-    sptd.Cdb[8]  = byte((NbSectors)&0xFF);        // lsb
+    sptd.Cdb[2]  = uint8_t((TargetSector>>24)&0xFF); // msb
+    sptd.Cdb[3]  = uint8_t((TargetSector>>16)&0xFF);
+    sptd.Cdb[4]  = uint8_t((TargetSector>>8)&0xFF);
+    sptd.Cdb[5]  = uint8_t((TargetSector)&0xFF);     // lsb
+    sptd.Cdb[6]  = uint8_t((NbSectors>>16)&0xFF);
+    sptd.Cdb[7]  = uint8_t((NbSectors>>8)&0xFF);
+    sptd.Cdb[8]  = uint8_t((NbSectors)&0xFF);        // lsb
 
     // send command
     MP_QueryPerformanceCounter(&PerfCountStart);
@@ -272,13 +274,13 @@ static BOOL Read_D5h(char DriveLetter, long int TargetSector, int NbSectors, boo
     ClearCDB();
     sptd.Cdb[0]  = 0xD5;
     sptd.Cdb[1]  = (FUAbit << 3);
-    sptd.Cdb[2]  = byte((TargetSector>>24)&0xFF); // msb
-    sptd.Cdb[3]  = byte((TargetSector>>16)&0xFF);
-    sptd.Cdb[4]  = byte((TargetSector>>8)&0xFF);
-    sptd.Cdb[5]  = byte((TargetSector)&0xFF);     // lsb
-    sptd.Cdb[6]  = byte((NbSectors>>16)&0xFF);
-    sptd.Cdb[7]  = byte((NbSectors>>8)&0xFF);
-    sptd.Cdb[8]  = byte((NbSectors)&0xFF);        // lsb
+    sptd.Cdb[2]  = uint8_t((TargetSector>>24)&0xFF); // msb
+    sptd.Cdb[3]  = uint8_t((TargetSector>>16)&0xFF);
+    sptd.Cdb[4]  = uint8_t((TargetSector>>8)&0xFF);
+    sptd.Cdb[5]  = uint8_t((TargetSector)&0xFF);     // lsb
+    sptd.Cdb[6]  = uint8_t((NbSectors>>16)&0xFF);
+    sptd.Cdb[7]  = uint8_t((NbSectors>>8)&0xFF);
+    sptd.Cdb[8]  = uint8_t((NbSectors)&0xFF);        // lsb
 
     // send command
     MP_QueryPerformanceCounter(&PerfCountStart);
@@ -301,14 +303,14 @@ static BOOL Read_D8h(char DriveLetter, long int TargetSector, int NbSectors, boo
     ClearCDB();
     sptd.Cdb[0]  = 0xD8;
     sptd.Cdb[1]  = (FUAbit << 3);
-    sptd.Cdb[2]  = byte((TargetSector>>24)&0xFF); // msb
-    sptd.Cdb[3]  = byte((TargetSector>>16)&0xFF);
-    sptd.Cdb[4]  = byte((TargetSector>>8)&0xFF);
-    sptd.Cdb[5]  = byte((TargetSector)&0xFF);     // lsb
-    sptd.Cdb[6]  = byte((NbSectors>>24)&0xFF);    // msb
-    sptd.Cdb[7]  = byte((NbSectors>>16)&0xFF);
-    sptd.Cdb[8]  = byte((NbSectors>>8)&0xFF);
-    sptd.Cdb[9]  = byte((NbSectors)&0xFF);        // lsb
+    sptd.Cdb[2]  = uint8_t((TargetSector>>24)&0xFF); // msb
+    sptd.Cdb[3]  = uint8_t((TargetSector>>16)&0xFF);
+    sptd.Cdb[4]  = uint8_t((TargetSector>>8)&0xFF);
+    sptd.Cdb[5]  = uint8_t((TargetSector)&0xFF);     // lsb
+    sptd.Cdb[6]  = uint8_t((NbSectors>>24)&0xFF);    // msb
+    sptd.Cdb[7]  = uint8_t((NbSectors>>16)&0xFF);
+    sptd.Cdb[8]  = uint8_t((NbSectors>>8)&0xFF);
+    sptd.Cdb[9]  = uint8_t((NbSectors)&0xFF);        // lsb
 
     // send command
     MP_QueryPerformanceCounter(&PerfCountStart);
@@ -356,10 +358,10 @@ static BOOL PlextorFUAFlush(char DriveLetter, long int TargetSector)
     ClearCDB();
     sptd.Cdb[0]  = 0x28;       // READ(10) command
     sptd.Cdb[1]  = 0x08;       // FUA
-    sptd.Cdb[2]  = byte((TargetSector>>24)&0xFF); // msb
-    sptd.Cdb[3]  = byte((TargetSector>>16)&0xFF);
-    sptd.Cdb[4]  = byte((TargetSector>>8)&0xFF);
-    sptd.Cdb[5]  = byte((TargetSector)&0xFF);     // lsb
+    sptd.Cdb[2]  = uint8_t((TargetSector>>24)&0xFF); // msb
+    sptd.Cdb[3]  = uint8_t((TargetSector>>16)&0xFF);
+    sptd.Cdb[4]  = uint8_t((TargetSector>>8)&0xFF);
+    sptd.Cdb[5]  = uint8_t((TargetSector)&0xFF);     // lsb
     // size stays zero, that's how this command works
     // MMC spec specifies that "A Transfer Length of zero indicates that no
     // logical blocks shall be transferred. This condition shall not be
@@ -407,8 +409,8 @@ static BOOL ModeSense(char DriveLetter, unsigned char PageCode, unsigned char Su
     sptd.Cdb[0]  = 0x5A;                     // MODE SENSE(10)
     sptd.Cdb[2]  = PageCode;
     sptd.Cdb[3]  = SubPageCode;
-    sptd.Cdb[7]  = byte((size>>8)&0xFF);     // size
-    sptd.Cdb[8]  = byte((size)&0xFF);
+    sptd.Cdb[7]  = uint8_t((size>>8)&0xFF);     // size
+    sptd.Cdb[8]  = uint8_t((size)&0xFF);
 
     // send command
     retval = DeviceIoControl(hVolume,IOCTL_SCSI_PASS_THROUGH_DIRECT,(PVOID)&sptd,
@@ -432,8 +434,8 @@ static BOOL ModeSelect(char DriveLetter, unsigned char PageCode, unsigned char S
     sptd.Cdb[0]  = 0x55;                     // MODE SENSE(10)
     sptd.Cdb[2]  = PageCode;
     sptd.Cdb[3]  = SubPageCode;
-    sptd.Cdb[7]  = byte((size>>8)&0xFF);     // size
-    sptd.Cdb[8]  = byte((size)&0xFF);
+    sptd.Cdb[7]  = uint8_t((size>>8)&0xFF);     // size
+    sptd.Cdb[8]  = uint8_t((size)&0xFF);
 
     // send command
     retval = DeviceIoControl(hVolume,IOCTL_SCSI_PASS_THROUGH_DIRECT,(PVOID)&sptd,
@@ -453,12 +455,12 @@ static BOOL Prefetch(char DriveLetter, long int TargetSector, unsigned int NbSec
     // build CDB
     ClearCDB();
     sptd.Cdb[0]  = 0x34;    // PREFETCH
-    sptd.Cdb[2]  = byte((TargetSector>>24)&0xFF); // target sector
-    sptd.Cdb[3]  = byte((TargetSector>>16)&0xFF);
-    sptd.Cdb[4]  = byte((TargetSector>>8)&0xFF);
-    sptd.Cdb[5]  = byte((TargetSector)&0xFF);
-    sptd.Cdb[7]  = byte((NbSectors>>8)&0xFF);     // size
-    sptd.Cdb[8]  = byte((NbSectors)&0xFF);
+    sptd.Cdb[2]  = uint8_t((TargetSector>>24)&0xFF); // target sector
+    sptd.Cdb[3]  = uint8_t((TargetSector>>16)&0xFF);
+    sptd.Cdb[4]  = uint8_t((TargetSector>>8)&0xFF);
+    sptd.Cdb[5]  = uint8_t((TargetSector)&0xFF);
+    sptd.Cdb[7]  = uint8_t((NbSectors>>8)&0xFF);     // size
+    sptd.Cdb[8]  = uint8_t((NbSectors)&0xFF);
 
     // send command
     retval = DeviceIoControl(hVolume,IOCTL_SCSI_PASS_THROUGH_DIRECT,(PVOID)&sptd,
@@ -1653,7 +1655,7 @@ int main(int argc, char **argv)
     }
 
     // ------------ actual stuff --------------
-    DataBuf = (byte *)malloc(NbBurstReadSectors * 2448 * sizeof(byte));
+    DataBuf = (uint8_t *)malloc(NbBurstReadSectors * 2448 * sizeof(uint8_t));
     if (DataBuf == NULL)
     {
         printf("\nError: cannot allocate memory");
