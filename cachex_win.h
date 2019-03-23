@@ -1,11 +1,16 @@
 #ifndef CACHEX_WIN_H
 #define CACHEX_WIN_H
 
+#define WIN32_LEAN_AND_MEAN
 #include <windows.h>
-#include <winioctl.h>
-#include <ntddscsi.h>
 
 namespace windows_detail {
+static const UCHAR SCSI_IOCTL_DATA_OUT = 0;
+static const UCHAR SCSI_IOCTL_DATA_IN = 1;
+static const UCHAR SCSI_IOCTL_DATA_UNSPECIFIED = 2;
+
+static const DWORD IOCTL_SCSI_PASS_THROUGH_DIRECT = 0x4D014;
+
 static LARGE_INTEGER init_qpc_freq() {
     LARGE_INTEGER freq;
     QueryPerformanceFrequency(&freq);
@@ -21,6 +26,22 @@ static void MP_QueryPerformanceCounter(LARGE_INTEGER* lpCounter)
     QueryPerformanceCounter(lpCounter);
     SetThreadAffinityMask(hCurThread, dwOldMask);
 }
+
+typedef struct _SCSI_PASS_THROUGH_DIRECT {
+    USHORT Length;
+    UCHAR ScsiStatus;
+    UCHAR PathId;
+    UCHAR TargetId;
+    UCHAR Lun;
+    UCHAR CdbLength;
+    UCHAR SenseInfoLength;
+    UCHAR DataIn;
+    ULONG DataTransferLength;
+    ULONG TimeOutValue;
+    PVOID DataBuffer;
+    ULONG SenseInfoOffset;
+    UCHAR Cdb[16];
+}SCSI_PASS_THROUGH_DIRECT, *PSCSI_PASS_THROUGH_DIRECT;
 }
 
 struct platform_windows {
@@ -86,6 +107,7 @@ static void set_normal_priority() {
 
   template<std::size_t CDBLength>
   static void exec_command(CommandResult& rv, const std::array<std::uint8_t, CDBLength> &cdb) {
+    using namespace windows_detail;
     SCSI_PASS_THROUGH_DIRECT sptd;
     sptd.Length             = sizeof(sptd);
     sptd.PathId             = 0;                  // SCSI card ID will be filled in automatically
