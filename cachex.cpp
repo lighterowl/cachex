@@ -1,6 +1,6 @@
 /***********************************************************************************************
   CacheExplorer 0.9   spath@cdfreaks.com  2006/xx
-/***********************************************************************************************/
+ ***********************************************************************************************/
 #include <cstdint>
 #include <cstdio>
 
@@ -522,7 +522,7 @@ static bool SpinDrive(unsigned int Seconds)
 
     if (retval)
     {
-        DEBUG(SPINNINGDRIVE);
+        DEBUG("%s", SPINNINGDRIVE);
         auto TimeStart = platform::monotonic_clock();
         while( platform::monotonic_clock() - TimeStart <= (unsigned long)(Seconds * 1000) )
         {
@@ -546,7 +546,7 @@ static void ShowCacheValues(char DriveLetter)
     }
     else
     {
-        SUPERDEBUG("\ninfo: cannot read CD/DVD Capabilities page");
+        SUPERDEBUG("%s", "\ninfo: cannot read CD/DVD Capabilities page");
         RequestSense();
     }
     result = ModeSense(CACHING_MODE_PAGE, 0, 18);
@@ -556,7 +556,7 @@ static void ShowCacheValues(char DriveLetter)
     }
     else
     {
-        SUPERDEBUG("\ninfo: cannot read Caching Mode page");
+        SUPERDEBUG("%s", "\ninfo: cannot read Caching Mode page");
         RequestSense();
     }
 }
@@ -588,7 +588,7 @@ static bool SetCacheRCDBit(bool RCDBitValue)
     else
 #endif
     {
-        DEBUG("\ninfo: cannot read Caching Mode page");
+        DEBUG("%s", "\ninfo: cannot read Caching Mode page");
         RequestSense();
     }
     return(retval);
@@ -688,7 +688,7 @@ static int TestPlextorFUACommandWorks(int ReadCommand, long int TargetSector, in
             InvalidationSuccess++;
         }
     }
-    DEBUG("\nresult: ");
+    DEBUG("%s", "\nresult: ");
     return(InvalidationSuccess);
 }
 
@@ -1643,7 +1643,7 @@ int main(int argc, char **argv)
                 // 4) Find the size of data invalidated  by Plextor FUA command
                 printf(TESTINGPLEXFUA2);
                 InvalidatedSectors = TestPlextorFUAInvalidationSizeWrapper( 15000, 1);
-                DEBUG("\nresult: ");
+                DEBUG("%s", "\nresult: ");
                 if (InvalidatedSectors > 0)
                 {
                     printf("ok (%d)", InvalidatedSectors);
