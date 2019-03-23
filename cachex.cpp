@@ -778,7 +778,7 @@ void TestSupportedReadCommands(char DriveLetter)
                 }
                 else
                 {
-                    SUPERDEBUG2("\ncommand %2Xh with FUA bit rejected",Commands[i].FuncByte);
+                    SUPERDEBUG("\ncommand %2Xh with FUA bit rejected",Commands[i].FuncByte);
                     Commands[i].FUAbitSupported = FALSE;
                     RequestSense(DriveLetter);
                 }
@@ -786,7 +786,7 @@ void TestSupportedReadCommands(char DriveLetter)
         }
         else
         {
-            SUPERDEBUG2("\ncommand %2Xh rejected",Commands[i].FuncByte);
+            SUPERDEBUG("\ncommand %2Xh rejected",Commands[i].FuncByte);
             RequestSense(DriveLetter);
         }
     }
@@ -803,13 +803,13 @@ bool TestPlextorFUACommand(char DriveLetter, int NbIterations)
     if (!PlextorFUAFlush(DriveLetter, 100000))
     {
         printf(REJECTED);
-        DEBUG2(" (status = %d)",sptd.ScsiStatus);
+        DEBUG(" (status = %d)",sptd.ScsiStatus);
         return(FALSE);
     }
     else
     {
         printf(ACCEPTED);
-        DEBUG2(" (status = %d)",sptd.ScsiStatus);
+        DEBUG(" (status = %d)",sptd.ScsiStatus);
         return(TRUE);
     }
 }
@@ -824,7 +824,7 @@ int TestPlextorFUACommandWorks(char DriveLetter, int ReadCommand, long int Targe
     int InvalidationSuccess = 0;
     double InitDelay2 = 0;
 
-    DEBUG5("\ninfo: %d test(s), c/nc ratio: %d, burst: %d, max: %d",
+    DEBUG("\ninfo: %d test(s), c/nc ratio: %d, burst: %d, max: %d",
            NbTests, CachedNonCachedSpeedFactor, NbBurstReadSectors, MaxCacheSectors);
 
     for (i=0; i<NbTests; i++)
@@ -843,7 +843,7 @@ int TestPlextorFUACommandWorks(char DriveLetter, int ReadCommand, long int Targe
         PlextorFUAFlush(DriveLetter, TargetSector);
         Commands[ReadCommand].pFunc(DriveLetter, TargetSector + NbBurstReadSectors, NbBurstReadSectors, FALSE);
         Delay2 = ((double)PerfCountEnd.QuadPart - (double)PerfCountStart.QuadPart) / (double)freq.QuadPart;
-        DEBUG5("\n %.2f ms / %.2f ms -> %.2f ms / %.2f ms", InitDelay, Delay, InitDelay2, Delay2);
+        DEBUG("\n %.2f ms / %.2f ms -> %.2f ms / %.2f ms", InitDelay, Delay, InitDelay2, Delay2);
 
         // compare times
         if (Delay2 > (CachedNonCachedSpeedFactor * Delay))
@@ -868,7 +868,7 @@ int TestPlextorFUACommandWorksWrapper(char DriveLetter, long int TargetSector, i
         {
             if (Commands[ValidReadCommand].Supported)
             {
-                DEBUG2("\ninfo: using command %02Xh",Commands[ValidReadCommand].FuncByte);
+                DEBUG("\ninfo: using command %02Xh",Commands[ValidReadCommand].FuncByte);
                 retval = TestPlextorFUACommandWorks(DriveLetter, ValidReadCommand, TargetSector, NbTests);
                 break;
             }
@@ -934,7 +934,7 @@ int TestRCDBitWorks(char DriveLetter, int ReadCommand, long int TargetSector, in
     int i;
     int InvalidationSuccess = 0;
 
-    DEBUG5("\ninfo: %d test(s), c/nc ratio: %d, burst: %d, max: %d",
+    DEBUG("\ninfo: %d test(s), c/nc ratio: %d, burst: %d, max: %d",
            NbTests, CachedNonCachedSpeedFactor, NbBurstReadSectors, MaxCacheSectors);
     for (i=0; i<NbTests; i++)
     {
@@ -951,7 +951,7 @@ int TestRCDBitWorks(char DriveLetter, int ReadCommand, long int TargetSector, in
         InitDelay = ((double)PerfCountEnd.QuadPart - (double)PerfCountStart.QuadPart) / (double)freq.QuadPart;
         Commands[ReadCommand].pFunc(DriveLetter, TargetSector + NbBurstReadSectors, NbBurstReadSectors, FALSE);
         Delay = ((double)PerfCountEnd.QuadPart - (double)PerfCountStart.QuadPart) / (double)freq.QuadPart;
-        DEBUG5("\n1) %d : %.2f ms / %d : %.2f ms", TargetSector, InitDelay, TargetSector + NbBurstReadSectors, Delay);
+        DEBUG("\n1) %d : %.2f ms / %d : %.2f ms", TargetSector, InitDelay, TargetSector + NbBurstReadSectors, Delay);
 
         // disable caching
         if (!SetCacheRCDBit(DriveLetter,RCD_READ_CACHE_DISABLED))
@@ -966,7 +966,7 @@ int TestRCDBitWorks(char DriveLetter, int ReadCommand, long int TargetSector, in
         InitDelay = ((double)PerfCountEnd.QuadPart - (double)PerfCountStart.QuadPart) / (double)freq.QuadPart;
         Commands[ReadCommand].pFunc(DriveLetter, TargetSector + NbBurstReadSectors, NbBurstReadSectors, FALSE);
         Delay2 = ((double)PerfCountEnd.QuadPart - (double)PerfCountStart.QuadPart) / (double)freq.QuadPart;
-        DEBUG5("\n2) %d : %.2f ms / %d : %.2f ms", TargetSector, InitDelay, TargetSector + NbBurstReadSectors, Delay2);
+        DEBUG("\n2) %d : %.2f ms / %d : %.2f ms", TargetSector, InitDelay, TargetSector + NbBurstReadSectors, Delay2);
 
         // compare times
         if (Delay2 > (CachedNonCachedSpeedFactor * Delay))
@@ -974,7 +974,7 @@ int TestRCDBitWorks(char DriveLetter, int ReadCommand, long int TargetSector, in
             InvalidationSuccess++;
         }
     }
-    DEBUG3("\nresult: %d/%d\n", InvalidationSuccess, NbTests);
+    DEBUG("\nresult: %d/%d\n", InvalidationSuccess, NbTests);
     return(InvalidationSuccess);
 }
 
@@ -990,7 +990,7 @@ int TestRCDBitWorksWrapper(char DriveLetter, long int TargetSector, int NbTests)
         {
             if (Commands[ValidReadCommand].Supported)
             {
-                DEBUG2("\ninfo: using command %02Xh",Commands[ValidReadCommand].FuncByte);
+                DEBUG("\ninfo: using command %02Xh",Commands[ValidReadCommand].FuncByte);
                 retval = TestRCDBitWorks(DriveLetter, ValidReadCommand, TargetSector, NbTests);
                 break;
             }
@@ -1022,7 +1022,7 @@ int TestCacheLineSize_Straight(char DriveLetter, unsigned char ReadCommand, long
     int MaxCacheLineSize= 0;
     double PreviousDelay, InitialDelay;
 
-    DEBUG5("\ninfo: %d test(s), c/nc ratio: %d, burst: %d, max: %d",
+    DEBUG("\ninfo: %d test(s), c/nc ratio: %d, burst: %d, max: %d",
            NbMeasures, CachedNonCachedSpeedFactor, NbBurstReadSectors, MaxCacheSectors);
     for (i=0; i<NbMeasures; i++)
     {
@@ -1033,7 +1033,7 @@ int TestCacheLineSize_Straight(char DriveLetter, unsigned char ReadCommand, long
         // with a number of sectors following this one.
         Commands[ReadCommand].pFunc(DriveLetter, TargetSector, NbBurstReadSectors, FALSE);
         InitialDelay = ((double)PerfCountEnd.QuadPart - (double)PerfCountStart.QuadPart) / (double)freq.QuadPart;
-        SUPERDEBUG3("\n init %d: %f",TargetSector, InitialDelay);
+        SUPERDEBUG("\n init %d: %f",TargetSector, InitialDelay);
 
         // read 1 sector at a time and time the reads until one takes more
         // than [CachedNonCachedSpeedFactor] times the delay taken by the previous read
@@ -1041,7 +1041,7 @@ int TestCacheLineSize_Straight(char DriveLetter, unsigned char ReadCommand, long
         {
             Commands[ReadCommand].pFunc(DriveLetter, TargetSector + TargetSectorOffset, NbBurstReadSectors, FALSE);
             Delay = ((double)PerfCountEnd.QuadPart - (double)PerfCountStart.QuadPart) / (double)freq.QuadPart;
-            SUPERDEBUG3("\n %d: %f",TargetSector + TargetSectorOffset,Delay);
+            SUPERDEBUG("\n %d: %f",TargetSector + TargetSectorOffset,Delay);
 
             if (Delay >= (CachedNonCachedSpeedFactor * PreviousDelay))
             {
@@ -1057,7 +1057,7 @@ int TestCacheLineSize_Straight(char DriveLetter, unsigned char ReadCommand, long
         {
             CacheLineSize = TargetSectorOffset;
             printf(CACHELINESIZE2,(int)((CacheLineSize*2352)/1024),CacheLineSize);
-            DEBUG4(" (%.2f .. %.2f -> %.2f)",InitialDelay,PreviousDelay,Delay);
+            DEBUG(" (%.2f .. %.2f -> %.2f)",InitialDelay,PreviousDelay,Delay);
 
             if ((i > NB_IGNORE_MEASURES) && (CacheLineSize > MaxCacheLineSize))
             {
@@ -1096,7 +1096,7 @@ int TestCacheLineSize_Wrap(char DriveLetter, unsigned char ReadCommand, long int
     int MaxCacheLineSize= 0;
     double InitialDelay, PreviousInitDelay;
 
-    DEBUG5("\ninfo: %d test(s), c/nc ratio: %d, burst: %d, max: %d",
+    DEBUG("\ninfo: %d test(s), c/nc ratio: %d, burst: %d, max: %d",
            NbMeasures, CachedNonCachedSpeedFactor, NbBurstReadSectors, MaxCacheSectors);
     for (i=0; i<NbMeasures; i++)
     {
@@ -1106,10 +1106,10 @@ int TestCacheLineSize_Wrap(char DriveLetter, unsigned char ReadCommand, long int
         // with a number of sectors following this one.
         Commands[ReadCommand].pFunc(DriveLetter, TargetSector, NbBurstReadSectors, FALSE);
         InitialDelay = ((double)PerfCountEnd.QuadPart - (double)PerfCountStart.QuadPart) / (double)freq.QuadPart;
-        SUPERDEBUG3("\n init %d: %f",TargetSector, InitialDelay);
+        SUPERDEBUG("\n init %d: %f",TargetSector, InitialDelay);
         Commands[ReadCommand].pFunc(DriveLetter, TargetSector, NbBurstReadSectors, FALSE);
         PreviousInitDelay = ((double)PerfCountEnd.QuadPart - (double)PerfCountStart.QuadPart) / (double)freq.QuadPart;
-        SUPERDEBUG3("\n %d: %f",TargetSector, PreviousInitDelay);
+        SUPERDEBUG("\n %d: %f",TargetSector, PreviousInitDelay);
 
         // read 1 sector forward and the initial sector. If the original sector takes more
         // than [CachedNonCachedSpeedFactor] times the delay taken by the previous read of,
@@ -1118,11 +1118,11 @@ int TestCacheLineSize_Wrap(char DriveLetter, unsigned char ReadCommand, long int
         {
             Commands[ReadCommand].pFunc(DriveLetter, TargetSector + TargetSectorOffset, NbBurstReadSectors, FALSE);
             Delay = ((double)PerfCountEnd.QuadPart - (double)PerfCountStart.QuadPart) / (double)freq.QuadPart;
-            SUPERDEBUG3("\n %d: %f",TargetSector + TargetSectorOffset,Delay);
+            SUPERDEBUG("\n %d: %f",TargetSector + TargetSectorOffset,Delay);
 
             Commands[ReadCommand].pFunc(DriveLetter, TargetSector, NbBurstReadSectors, FALSE);
             Delay2 = ((double)PerfCountEnd.QuadPart - (double)PerfCountStart.QuadPart) / (double)freq.QuadPart;
-            SUPERDEBUG3("\n %d: %f",TargetSector,Delay2);
+            SUPERDEBUG("\n %d: %f",TargetSector,Delay2);
 
             if (Delay2 >= (CachedNonCachedSpeedFactor * PreviousInitDelay))
             {
@@ -1140,14 +1140,14 @@ int TestCacheLineSize_Wrap(char DriveLetter, unsigned char ReadCommand, long int
             if (TargetSectorOffset <= 1)
             {
                 CachedNonCachedSpeedFactor++;
-                DEBUG2("\ninfo: increasing c/nc ratio to %d", CachedNonCachedSpeedFactor);
+                DEBUG("\ninfo: increasing c/nc ratio to %d", CachedNonCachedSpeedFactor);
                 i--;
             }
             else
             {
                 CacheLineSize = TargetSectorOffset;
                 printf(CACHELINESIZE2,(int)((CacheLineSize*2352)/1024),CacheLineSize);
-                DEBUG4(" (%.2f .. %.2f -> %.2f)",InitialDelay,PreviousInitDelay,Delay2);
+                DEBUG(" (%.2f .. %.2f -> %.2f)",InitialDelay,PreviousInitDelay,Delay2);
 
                 if ((i > NB_IGNORE_MEASURES) && (CacheLineSize > MaxCacheLineSize))
                 {
@@ -1178,7 +1178,7 @@ int TestCacheLineSizeWrapper(char DriveLetter, long int TargetSector, int NbMeas
         {
             if (Commands[ValidReadCommand].Supported)
             {
-                DEBUG2("\ninfo: using command %02Xh",Commands[ValidReadCommand].FuncByte);
+                DEBUG("\ninfo: using command %02Xh",Commands[ValidReadCommand].FuncByte);
 
                 switch(method)
                 {
@@ -1223,7 +1223,7 @@ int TestCacheLineNumber(char DriveLetter, unsigned char ReadCommand, long int Ta
     double PreviousDelay;
     long int LocalTargetSector = TargetSector;
 
-    DEBUG2("\ninfo: using c/nc ratio : %d", CachedNonCachedSpeedFactor);
+    DEBUG("\ninfo: using c/nc ratio : %d", CachedNonCachedSpeedFactor);
     if (!DebugMode)
     {
         printf("\n");
@@ -1238,7 +1238,7 @@ int TestCacheLineNumber(char DriveLetter, unsigned char ReadCommand, long int Ta
         // with a number of sectors following this one.
         Commands[ReadCommand].pFunc(DriveLetter, LocalTargetSector, 1, FALSE);
         PreviousDelay = ((double)PerfCountEnd.QuadPart - (double)PerfCountStart.QuadPart) / (double)freq.QuadPart;
-        SUPERDEBUG3("\n first read at %d: %.2f",LocalTargetSector ,PreviousDelay);
+        SUPERDEBUG("\n first read at %d: %.2f",LocalTargetSector ,PreviousDelay);
 
         for (j=1; j<MAX_CACHE_LINES; j++)
         {
@@ -1248,7 +1248,7 @@ int TestCacheLineNumber(char DriveLetter, unsigned char ReadCommand, long int Ta
             // read 1 sector next to the original one
             Commands[ReadCommand].pFunc(DriveLetter, LocalTargetSector + 2*j, 1, FALSE);
             Delay = ((double)PerfCountEnd.QuadPart - (double)PerfCountStart.QuadPart) / (double)freq.QuadPart;
-            SUPERDEBUG3("\n read at %d: %.2f",LocalTargetSector + 2*j, Delay);
+            SUPERDEBUG("\n read at %d: %.2f",LocalTargetSector + 2*j, Delay);
 
             if (DebugMode || SuperDebugMode)
             {
@@ -1281,7 +1281,7 @@ int TestCacheLineNumberWrapper(char DriveLetter, long int TargetSector, int NbMe
         {
             if (Commands[ValidReadCommand].Supported)
             {
-                DEBUG2("\ninfo: using command %02Xh",Commands[ValidReadCommand].FuncByte);
+                DEBUG("\ninfo: using command %02Xh",Commands[ValidReadCommand].FuncByte);
                 retval = TestCacheLineNumber(DriveLetter, ValidReadCommand, TargetSector, NbMeasures);
                 break;
             }
@@ -1309,7 +1309,7 @@ int TestPlextorFUAInvalidationSize(char DriveLetter, unsigned char ReadCommand, 
     int InvalidatedSize = 0;
     double InitialDelay;
 
-    DEBUG2("\ninfo: using c/nc ratio : %d", CachedNonCachedSpeedFactor);
+    DEBUG("\ninfo: using c/nc ratio : %d", CachedNonCachedSpeedFactor);
 
     for (i=0; i<NbMeasures; i++)
     {
@@ -1321,7 +1321,7 @@ int TestPlextorFUAInvalidationSize(char DriveLetter, unsigned char ReadCommand, 
             // with a number of sectors following this one.
             Commands[ReadCommand].pFunc(DriveLetter, TargetSector, 1, FALSE);
             InitialDelay = ((double)PerfCountEnd.QuadPart - (double)PerfCountStart.QuadPart) / (double)freq.QuadPart;
-            SUPERDEBUG4("\n(%d) init = %.2f, thr = %.2f",i, InitialDelay, (double)(InitialDelay / CachedNonCachedSpeedFactor));
+            SUPERDEBUG("\n(%d) init = %.2f, thr = %.2f",i, InitialDelay, (double)(InitialDelay / CachedNonCachedSpeedFactor));
 
             // invalidate cache with Plextor FUA command
             PlextorFUAFlush(DriveLetter, TargetSector);
@@ -1335,7 +1335,7 @@ int TestPlextorFUAInvalidationSize(char DriveLetter, unsigned char ReadCommand, 
             // read sectors backwards to find this ---|  spot
             Commands[ReadCommand].pFunc(DriveLetter, TargetSector + TargetSectorOffset, 1, FALSE);
             Delay = ((double)PerfCountEnd.QuadPart - (double)PerfCountStart.QuadPart) / (double)freq.QuadPart;
-            SUPERDEBUG4(" (%d) %d: %.2f",i, TargetSector + TargetSectorOffset,Delay);
+            SUPERDEBUG(" (%d) %d: %.2f",i, TargetSector + TargetSectorOffset,Delay);
 
             if (Delay <= (InitialDelay / CachedNonCachedSpeedFactor))
             {
@@ -1360,7 +1360,7 @@ int TestPlextorFUAInvalidationSizeWrapper(char DriveLetter, long int TargetSecto
         {
             if (Commands[ValidReadCommand].Supported)
             {
-                DEBUG2("\ninfo: using command %02Xh",Commands[ValidReadCommand].FuncByte);
+                DEBUG("\ninfo: using command %02Xh",Commands[ValidReadCommand].FuncByte);
                 retval = TestPlextorFUAInvalidationSize(DriveLetter, ValidReadCommand, TargetSector, NbMeasures);
                 break;
             }
@@ -1429,7 +1429,7 @@ int TestCacheLineSize_Stat(char DriveLetter, unsigned char ReadCommand, long int
     {
         if ( Measures[i] > Maxdelay) Maxdelay = Measures[i];
     }
-    DEBUG3("\ninitial: %.2f ms, max: %.2f ms",Measures[0], Maxdelay);
+    DEBUG("\ninitial: %.2f ms, max: %.2f ms",Measures[0], Maxdelay);
 
     // find all values above 90% of max
     Threshold = Maxdelay * ThresholdRatioMethod2;
@@ -1437,13 +1437,13 @@ int TestCacheLineSize_Stat(char DriveLetter, unsigned char ReadCommand, long int
     {
         if ( Measures[i] > Threshold) PeakMeasuresIndexes[NbPeakMeasures++] = i;
     }
-    DEBUG5("\nmeas: %d/%d above %.2f ms (%.2f)",NbPeakMeasures, NbMeasures, Threshold, ThresholdRatioMethod2);
+    DEBUG("\nmeas: %d/%d above %.2f ms (%.2f)",NbPeakMeasures, NbMeasures, Threshold, ThresholdRatioMethod2);
 
     // calculate stats on differences and keep max
     for (i=1; i<NbPeakMeasures; i++)
     {
         CurrentDelta = PeakMeasuresIndexes[i] - PeakMeasuresIndexes[i-1];
-        SUPERDEBUG2("\ndelta = %d", CurrentDelta);
+        SUPERDEBUG("\ndelta = %d", CurrentDelta);
 
         for (j=0; j<NbPeakMeasures; j++)
         {

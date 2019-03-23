@@ -70,19 +70,9 @@ int TestRCDBitWorksWrapper(char DriveLetter, long int TargetSector, int NbTests)
 //--------------------------------------------------------------------------------------------------------
 //------------------------------------------- DEBUG ----------------------------------------------------
 //--------------------------------------------------------------------------------------------------------
-#define DEBUG(a) if (DebugMode) printf(a);
-#define DEBUG2(a,b) if (DebugMode) printf(a,b);
-#define DEBUG3(a,b,c) if (DebugMode) printf(a,b,c);
-#define DEBUG4(a,b,c,d) if (DebugMode) printf(a,b,c,d);
-#define DEBUG5(a,b,c,d,e) if (DebugMode) printf(a,b,c,d,e);
-#define DEBUG6(a,b,c,d,e,f) if (DebugMode) printf(a,b,c,d,e,f);
+#define DEBUG(fmt, ...) if (DebugMode) printf(fmt, __VA_ARGS__);
 
-#define SUPERDEBUG(a) if (SuperDebugMode) printf(a);
-#define SUPERDEBUG2(a,b) if (SuperDebugMode) printf(a,b);
-#define SUPERDEBUG3(a,b,c) if (SuperDebugMode) printf(a,b,c);
-#define SUPERDEBUG4(a,b,c,d) if (SuperDebugMode) printf(a,b,c,d);
-#define SUPERDEBUG5(a,b,c,d,e) if (SuperDebugMode) printf(a,b,c,d,e);
-#define SUPERDEBUG6(a,b,c,d,e,f) if (SuperDebugMode) printf(a,b,c,d,e,f);
+#define SUPERDEBUG(fmt, ...) if (SuperDebugMode) printf(fmt, __VA_ARGS__);
 //--------------------------------------------------------------------------------------------------------
 //------------------------------------------- STRINGS ----------------------------------------------------
 //--------------------------------------------------------------------------------------------------------
