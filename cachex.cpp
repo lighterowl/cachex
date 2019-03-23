@@ -30,56 +30,6 @@
 #define RCD_READ_CACHE_DISABLED    1
 
 //--------------------------------------------------------------------------------------------------------
-//------------------------------------- FUNCTION PROTOTYPES ----------------------------------------------
-//--------------------------------------------------------------------------------------------------------
-
-// Help functions
-HANDLE OpenVolume(char DriveLetter);
-BOOL CloseVolume(HANDLE hVolume);
-void PrintIDString(unsigned char* dataChars, int dataLength);
-void ShowCacheValues(char DriveLetter);
-BOOL ClearCache();
-BOOL SpinDrive(char DriveLetter, unsigned int Seconds);
-void ClearCDB();
-BOOL PrintDriveInfo(char DriveLetter);
-BOOL SetCacheRCDBit(char DriveLetter, BOOL RCDBitValue);
-
-// MMC Read commands
-BOOL Read_BEh(char DriveLetter, long int TargetSector, int NbSectors, bool FUAbit);
-BOOL Read_A8h(char DriveLetter, long int TargetSector, int NbSectors, bool FUAbit);
-BOOL Read_28h(char DriveLetter, long int TargetSector, int NbSectors, bool FUAbit);
-BOOL Read_D4h(char DriveLetter, long int TargetSector, int NbSectors, bool FUAbit);
-BOOL Read_D5h(char DriveLetter, long int TargetSector, int NbSectors, bool FUAbit);
-BOOL Read_D8h(char DriveLetter, long int TargetSector, int NbSectors, bool FUAbit);
-
-// Other MMC commands
-BOOL ModeSense(char DriveLetter, unsigned char PageCode, unsigned char SubPageCode, int size);
-BOOL ModeSelect(char DriveLetter, unsigned char PageCode, unsigned char SubPageCode, int size);
-BOOL RequestSense(char DriveLetter);
-BOOL PlextorFUAFlush(char DriveLetter, long int TargetSector);
-BOOL SetDriveSpeed(char DriveLetter, unsigned char ReadSpeedX, unsigned char WriteSpeedX);
-BOOL Prefetch(char DriveLetter, long int TargetSector, unsigned int NbSectors);
-
-// Tests
-bool TestPlextorFUACommand(char DriveLetter, int NbIterations);
-void TimeMultipleReads (char DriveLetter, unsigned char ReadCommand, long int TargetSector, int NbReads, bool FUAbit);
-void TestCacheSpeedImpact(char DriveLetter, long int TargetSector, int NbReads);
-int TestCacheLineSize_Straight(char DriveLetter, unsigned char ReadCommand, long int TargetSector, int NbMeasures);
-int TestCacheLineSize_Wrap(char DriveLetter, unsigned char ReadCommand, long int TargetSector, int NbMeasures);
-int TestCacheLineSize_Stat(char DriveLetter, unsigned char ReadCommand, long int TargetSector, int NbMeasures, int BurstSize);
-int TestCacheLineSizeWrapper(char DriveLetter, long int TargetSector, int NbMeasures, int BurstSize, short method);
-int TestCacheLineNumber(char DriveLetter, unsigned char ReadCommand, long int TargetSector, int NbMeasures);
-int TestCacheLineNumberWrapper(char DriveLetter, long int TargetSector, int NbMeasures);
-int TestPlextorFUAInvalidationSize(char DriveLetter, unsigned char ReadCommand, long int TargetSector, int NbMeasures);
-int TestPlextorFUAInvalidationSizeWrapper(char DriveLetter, long int TargetSector, int NbMeasures);
-int TestCacheLineSizePrefetch(char DriveLetter, long int TargetSector);
-int TestPlextorFUACommandWorks(char DriveLetter, int ReadCommand, long int TargetSector, int NbTests);
-int TestPlextorFUACommandWorksWrapper(char DriveLetter, long int TargetSector, int NbTests);
-BOOL TestRCDBitSupport(char DriveLetter, long int TargetSector);
-int TestRCDBitWorks(char DriveLetter, int ReadCommand, long int TargetSector, int NbTests);
-int TestRCDBitWorksWrapper(char DriveLetter, long int TargetSector, int NbTests);
-
-//--------------------------------------------------------------------------------------------------------
 //------------------------------------------- DEBUG ----------------------------------------------------
 //--------------------------------------------------------------------------------------------------------
 #define DEBUG(fmt, ...) if (DebugMode) printf(fmt, __VA_ARGS__);
@@ -159,6 +109,269 @@ typedef struct
 } sDeltaArray;
 sDeltaArray DeltaArray[NBDELTA];
 
+static void MP_QueryPerformanceCounter(LARGE_INTEGER* lpCounter)
+{
+    HANDLE hCurThread = GetCurrentThread();
+    unsigned long dwOldMask = SetThreadAffinityMask(hCurThread, 1);
+
+    QueryPerformanceCounter(lpCounter);
+    SetThreadAffinityMask(hCurThread, dwOldMask);
+}
+
+static void ClearCDB()
+{
+    int i;
+    for (i=0; i<16; i++)
+    {
+        sptd.Cdb[i] = 0;
+    }
+}
+
+static void InitSPTDStructureForREAD(unsigned char CDBLength, unsigned int NbSectors)
+{
+    // fill in sptd structure
+    sptd.Length             = sizeof(sptd);
+    sptd.PathId             = 0;                  // SCSI card ID will be filled in automatically
+    sptd.TargetId           = 0;                  // SCSI target ID will also be filled in
+    sptd.Lun                = 0;                  // SCSI lun ID will also be filled in
+    sptd.CdbLength          = CDBLength;          // CDB size
+    sptd.SenseInfoLength    = 0;                  // Don't return any sense data
+    sptd.DataIn             = SCSI_IOCTL_DATA_IN; // There will be data from drive
+    sptd.DataTransferLength = 2448 * NbSectors;   // Size of data
+    sptd.TimeOutValue       = 60;                 // SCSI timeout value
+    sptd.DataBuffer         = (PVOID)(DataBuf);
+    sptd.SenseInfoOffset    = 0;
+}
+
+//--------------------------------------------------------------------------------------------------------
+//-------------------------------------- Read functions --------------------------------------------------
+//--------------------------------------------------------------------------------------------------------
+
+static BOOL Read_A8h(char DriveLetter, long int TargetSector, int NbSectors, bool FUAbit)
+{
+    BOOL retval;
+
+    if (hVolume != INVALID_HANDLE_VALUE)
+    {
+        DWORD dwBytesReturned;
+
+        InitSPTDStructureForREAD(12, NbSectors);
+
+        // build CDB
+        ClearCDB();
+        sptd.Cdb[0]  = 0xA8;
+        sptd.Cdb[1]  = (FUAbit << 3);
+        sptd.Cdb[2]  = byte((TargetSector>>24)&0xFF); // msb
+        sptd.Cdb[3]  = byte((TargetSector>>16)&0xFF);
+        sptd.Cdb[4]  = byte((TargetSector>>8)&0xFF);
+        sptd.Cdb[5]  = byte((TargetSector)&0xFF);     // lsb
+        sptd.Cdb[6]  = byte((NbSectors>>24)&0xFF);    // msb
+        sptd.Cdb[7]  = byte((NbSectors>>16)&0xFF);
+        sptd.Cdb[8]  = byte((NbSectors>>8)&0xFF);
+        sptd.Cdb[9]  = byte((NbSectors)&0xFF);        // lsb
+
+        // send command
+        MP_QueryPerformanceCounter(&PerfCountStart);
+        retval = DeviceIoControl(hVolume,IOCTL_SCSI_PASS_THROUGH_DIRECT,(PVOID)&sptd,
+                                 (DWORD)sizeof(SCSI_PASS_THROUGH_DIRECT), NULL, 0, &dwBytesReturned,NULL);
+        MP_QueryPerformanceCounter(&PerfCountEnd);
+
+        return retval;
+    }
+    else
+    {
+        printf("\nError: invalid handle");
+        return FALSE;
+    }
+}
+
+static BOOL Read_28h(char DriveLetter, long int TargetSector, int NbSectors, bool FUAbit)
+{
+    BOOL retval;
+
+    if (hVolume != INVALID_HANDLE_VALUE)
+    {
+        DWORD dwBytesReturned;
+
+        InitSPTDStructureForREAD(10, NbSectors);
+
+        // build CDB
+        ClearCDB();
+        sptd.Cdb[0]  = 0x28;
+        sptd.Cdb[1]  = (FUAbit << 3);
+        sptd.Cdb[2]  = byte((TargetSector>>24)&0xFF); // msb
+        sptd.Cdb[3]  = byte((TargetSector>>16)&0xFF);
+        sptd.Cdb[4]  = byte((TargetSector>>8)&0xFF);
+        sptd.Cdb[5]  = byte((TargetSector)&0xFF);     // lsb
+        sptd.Cdb[7]  = byte((NbSectors>>8)&0xFF);     // msb
+        sptd.Cdb[8]  = byte((NbSectors)&0xFF);        // lsb
+
+        // send command
+        MP_QueryPerformanceCounter(&PerfCountStart);
+        retval = DeviceIoControl(hVolume,IOCTL_SCSI_PASS_THROUGH_DIRECT,(PVOID)&sptd,
+                                 (DWORD)sizeof(SCSI_PASS_THROUGH_DIRECT), NULL, 0, &dwBytesReturned,NULL);
+        MP_QueryPerformanceCounter(&PerfCountEnd);
+
+        return retval;
+    }
+    else
+    {
+        printf("\nError: invalid handle");
+        return FALSE;
+    }
+}
+
+static BOOL Read_BEh(char DriveLetter, long int TargetSector, int NbSectors, bool FUAbit)
+{
+    BOOL retval;
+
+    if (hVolume != INVALID_HANDLE_VALUE)
+    {
+        DWORD dwBytesReturned;
+
+        InitSPTDStructureForREAD(12, NbSectors);
+
+        // build CDB
+        ClearCDB();
+        sptd.Cdb[0]  = 0xBE;
+        sptd.Cdb[1]  = 0x00;                          // 0x04 = audio data only, 0x00 = any type
+        sptd.Cdb[2]  = byte((TargetSector>>24)&0xFF); // address
+        sptd.Cdb[3]  = byte((TargetSector>>16)&0xFF);
+        sptd.Cdb[4]  = byte((TargetSector>>8)&0xFF);
+        sptd.Cdb[5]  = byte((TargetSector)&0xFF);
+        sptd.Cdb[6]  = byte((NbSectors>>16)&0xFF);    // size
+        sptd.Cdb[7]  = byte((NbSectors>>8)&0xFF);
+        sptd.Cdb[8]  = byte((NbSectors)&0xFF);
+        sptd.Cdb[9]  = 0x10;                          // just data
+        sptd.Cdb[10] = 0;                             // no subcode
+
+        // send command
+        MP_QueryPerformanceCounter(&PerfCountStart);
+        retval = DeviceIoControl(hVolume,IOCTL_SCSI_PASS_THROUGH_DIRECT,(PVOID)&sptd,
+                                 (DWORD)sizeof(SCSI_PASS_THROUGH_DIRECT), NULL, 0, &dwBytesReturned,NULL);
+        MP_QueryPerformanceCounter(&PerfCountEnd);
+
+        return retval;
+    }
+    else
+    {
+        printf("\nError: invalid handle");
+        return FALSE;
+    }
+}
+
+static BOOL Read_D4h(char DriveLetter, long int TargetSector, int NbSectors, bool FUAbit)
+{
+    BOOL retval;
+
+    if (hVolume != INVALID_HANDLE_VALUE)
+    {
+        DWORD dwBytesReturned;
+
+        InitSPTDStructureForREAD(10, NbSectors);
+
+        // build CDB
+        ClearCDB();
+        sptd.Cdb[0]  = 0xD4;
+        sptd.Cdb[1]  = (FUAbit << 3);
+        sptd.Cdb[2]  = byte((TargetSector>>24)&0xFF); // msb
+        sptd.Cdb[3]  = byte((TargetSector>>16)&0xFF);
+        sptd.Cdb[4]  = byte((TargetSector>>8)&0xFF);
+        sptd.Cdb[5]  = byte((TargetSector)&0xFF);     // lsb
+        sptd.Cdb[6]  = byte((NbSectors>>16)&0xFF);
+        sptd.Cdb[7]  = byte((NbSectors>>8)&0xFF);
+        sptd.Cdb[8]  = byte((NbSectors)&0xFF);        // lsb
+
+        // send command
+        MP_QueryPerformanceCounter(&PerfCountStart);
+        retval = DeviceIoControl(hVolume,IOCTL_SCSI_PASS_THROUGH_DIRECT,(PVOID)&sptd,
+                                 (DWORD)sizeof(SCSI_PASS_THROUGH_DIRECT), NULL, 0, &dwBytesReturned,NULL);
+        MP_QueryPerformanceCounter(&PerfCountEnd);
+
+        return retval;
+    }
+    else
+    {
+        printf("\nError: invalid handle");
+        return FALSE;
+    }
+}
+
+static BOOL Read_D5h(char DriveLetter, long int TargetSector, int NbSectors, bool FUAbit)
+{
+    BOOL retval;
+
+    if (hVolume != INVALID_HANDLE_VALUE)
+    {
+        DWORD dwBytesReturned;
+
+        InitSPTDStructureForREAD(10, NbSectors);
+
+        // build CDB
+        ClearCDB();
+        sptd.Cdb[0]  = 0xD5;
+        sptd.Cdb[1]  = (FUAbit << 3);
+        sptd.Cdb[2]  = byte((TargetSector>>24)&0xFF); // msb
+        sptd.Cdb[3]  = byte((TargetSector>>16)&0xFF);
+        sptd.Cdb[4]  = byte((TargetSector>>8)&0xFF);
+        sptd.Cdb[5]  = byte((TargetSector)&0xFF);     // lsb
+        sptd.Cdb[6]  = byte((NbSectors>>16)&0xFF);
+        sptd.Cdb[7]  = byte((NbSectors>>8)&0xFF);
+        sptd.Cdb[8]  = byte((NbSectors)&0xFF);        // lsb
+
+        // send command
+        MP_QueryPerformanceCounter(&PerfCountStart);
+        retval = DeviceIoControl(hVolume,IOCTL_SCSI_PASS_THROUGH_DIRECT,(PVOID)&sptd,
+                                 (DWORD)sizeof(SCSI_PASS_THROUGH_DIRECT), NULL, 0, &dwBytesReturned,NULL);
+        MP_QueryPerformanceCounter(&PerfCountEnd);
+
+        return retval;
+    }
+    else
+    {
+        printf("\nError: invalid handle");
+        return FALSE;
+    }
+}
+
+
+static BOOL Read_D8h(char DriveLetter, long int TargetSector, int NbSectors, bool FUAbit)
+{
+    BOOL retval;
+
+    if (hVolume != INVALID_HANDLE_VALUE)
+    {
+        DWORD dwBytesReturned;
+
+        InitSPTDStructureForREAD(12, NbSectors);
+
+        // build CDB
+        ClearCDB();
+        sptd.Cdb[0]  = 0xD8;
+        sptd.Cdb[1]  = (FUAbit << 3);
+        sptd.Cdb[2]  = byte((TargetSector>>24)&0xFF); // msb
+        sptd.Cdb[3]  = byte((TargetSector>>16)&0xFF);
+        sptd.Cdb[4]  = byte((TargetSector>>8)&0xFF);
+        sptd.Cdb[5]  = byte((TargetSector)&0xFF);     // lsb
+        sptd.Cdb[6]  = byte((NbSectors>>24)&0xFF);    // msb
+        sptd.Cdb[7]  = byte((NbSectors>>16)&0xFF);
+        sptd.Cdb[8]  = byte((NbSectors>>8)&0xFF);
+        sptd.Cdb[9]  = byte((NbSectors)&0xFF);        // lsb
+
+        // send command
+        MP_QueryPerformanceCounter(&PerfCountStart);
+        retval = DeviceIoControl(hVolume,IOCTL_SCSI_PASS_THROUGH_DIRECT,(PVOID)&sptd,
+                                 (DWORD)sizeof(SCSI_PASS_THROUGH_DIRECT), NULL, 0, &dwBytesReturned,NULL);
+        MP_QueryPerformanceCounter(&PerfCountEnd);
+
+        return retval;
+    }
+    else
+    {
+        printf("\nError: invalid handle");
+        return FALSE;
+    }
+}
 
 // drive characteristics
 int CacheLineSizeSectors = 0;
@@ -184,40 +397,6 @@ sReadCommand Commands[NB_READ_COMMANDS] = { {0xBE, &Read_BEh, FALSE, FALSE},
 //--------------------------------------------------------------------------------------------------------
 //------------------------------------------------- CODE -------------------------------------------------
 //--------------------------------------------------------------------------------------------------------
-void MP_QueryPerformanceCounter(LARGE_INTEGER* lpCounter)
-{
-    HANDLE hCurThread = GetCurrentThread();
-    unsigned long dwOldMask = SetThreadAffinityMask(hCurThread, 1);
-
-    QueryPerformanceCounter(lpCounter);
-    SetThreadAffinityMask(hCurThread, dwOldMask);
-}
-
-void ClearCDB()
-{
-    int i;
-    for (i=0; i<16; i++)
-    {
-        sptd.Cdb[i] = 0;
-    }
-}
-
-
-void InitSPTDStructureForREAD(unsigned char CDBLength, unsigned int NbSectors)
-{
-    // fill in sptd structure
-    sptd.Length             = sizeof(sptd);
-    sptd.PathId             = 0;                  // SCSI card ID will be filled in automatically
-    sptd.TargetId           = 0;                  // SCSI target ID will also be filled in
-    sptd.Lun                = 0;                  // SCSI lun ID will also be filled in
-    sptd.CdbLength          = CDBLength;          // CDB size
-    sptd.SenseInfoLength    = 0;                  // Don't return any sense data
-    sptd.DataIn             = SCSI_IOCTL_DATA_IN; // There will be data from drive
-    sptd.DataTransferLength = 2448 * NbSectors;   // Size of data
-    sptd.TimeOutValue       = 60;                 // SCSI timeout value
-    sptd.DataBuffer         = (PVOID)(DataBuf);
-    sptd.SenseInfoOffset    = 0;
-}
 
 
 BOOL PlextorFUAFlush(char DriveLetter, long int TargetSector)
@@ -439,6 +618,23 @@ BOOL CloseVolume(HANDLE hVolume)
     return CloseHandle(hVolume);
 }
 
+static void PrintIDString(unsigned char* dataChars, int dataLength)
+{
+    if (dataChars != NULL)
+    {
+        printf(" ");
+        while (0 < dataLength--)
+        {
+            char cc = *dataChars++;
+            cc &= 0x7F;
+            if (!((0x20 <= cc) && (cc <= 0x7E)))
+            {
+                cc ^= 0x40;
+            }
+            printf("%c",cc);
+        }
+    }
+}
 
 BOOL PrintDriveInfo(char DriveLetter)
 {
@@ -472,25 +668,6 @@ BOOL PrintDriveInfo(char DriveLetter)
     {
         printf("\nError: invalid handle");
         return FALSE;
-    }
-}
-
-
-void PrintIDString(unsigned char* dataChars, int dataLength)
-{
-    if (dataChars != NULL)
-    {
-        printf(" ");
-        while (0 < dataLength--)
-        {
-            char cc = *dataChars++;
-            cc &= 0x7F;
-            if (!((0x20 <= cc) && (cc <= 0x7E)))
-            {
-                cc ^= 0x40;
-            }
-            printf("%c",cc);
-        }
     }
 }
 
@@ -635,240 +812,6 @@ BOOL SetCacheRCDBit(char DriveLetter, BOOL RCDBitValue)
     }
     return(retval);
 }
-
-
-//--------------------------------------------------------------------------------------------------------
-//-------------------------------------- Read functions --------------------------------------------------
-//--------------------------------------------------------------------------------------------------------
-
-BOOL Read_BEh(char DriveLetter, long int TargetSector, int NbSectors, bool FUAbit)
-{
-    BOOL retval;
-
-    if (hVolume != INVALID_HANDLE_VALUE)
-    {
-        DWORD dwBytesReturned;
-
-        InitSPTDStructureForREAD(12, NbSectors);
-
-        // build CDB
-        ClearCDB();
-        sptd.Cdb[0]  = 0xBE;
-        sptd.Cdb[1]  = 0x00;                          // 0x04 = audio data only, 0x00 = any type
-        sptd.Cdb[2]  = byte((TargetSector>>24)&0xFF); // address
-        sptd.Cdb[3]  = byte((TargetSector>>16)&0xFF);
-        sptd.Cdb[4]  = byte((TargetSector>>8)&0xFF);
-        sptd.Cdb[5]  = byte((TargetSector)&0xFF);
-        sptd.Cdb[6]  = byte((NbSectors>>16)&0xFF);    // size
-        sptd.Cdb[7]  = byte((NbSectors>>8)&0xFF);
-        sptd.Cdb[8]  = byte((NbSectors)&0xFF);
-        sptd.Cdb[9]  = 0x10;                          // just data
-        sptd.Cdb[10] = 0;                             // no subcode
-
-        // send command
-        MP_QueryPerformanceCounter(&PerfCountStart);
-        retval = DeviceIoControl(hVolume,IOCTL_SCSI_PASS_THROUGH_DIRECT,(PVOID)&sptd,
-                                 (DWORD)sizeof(SCSI_PASS_THROUGH_DIRECT), NULL, 0, &dwBytesReturned,NULL);
-        MP_QueryPerformanceCounter(&PerfCountEnd);
-
-        return retval;
-    }
-    else
-    {
-        printf("\nError: invalid handle");
-        return FALSE;
-    }
-}
-
-BOOL Read_28h(char DriveLetter, long int TargetSector, int NbSectors, bool FUAbit)
-{
-    BOOL retval;
-
-    if (hVolume != INVALID_HANDLE_VALUE)
-    {
-        DWORD dwBytesReturned;
-
-        InitSPTDStructureForREAD(10, NbSectors);
-
-        // build CDB
-        ClearCDB();
-        sptd.Cdb[0]  = 0x28;
-        sptd.Cdb[1]  = (FUAbit << 3);
-        sptd.Cdb[2]  = byte((TargetSector>>24)&0xFF); // msb
-        sptd.Cdb[3]  = byte((TargetSector>>16)&0xFF);
-        sptd.Cdb[4]  = byte((TargetSector>>8)&0xFF);
-        sptd.Cdb[5]  = byte((TargetSector)&0xFF);     // lsb
-        sptd.Cdb[7]  = byte((NbSectors>>8)&0xFF);     // msb
-        sptd.Cdb[8]  = byte((NbSectors)&0xFF);        // lsb
-
-        // send command
-        MP_QueryPerformanceCounter(&PerfCountStart);
-        retval = DeviceIoControl(hVolume,IOCTL_SCSI_PASS_THROUGH_DIRECT,(PVOID)&sptd,
-                                 (DWORD)sizeof(SCSI_PASS_THROUGH_DIRECT), NULL, 0, &dwBytesReturned,NULL);
-        MP_QueryPerformanceCounter(&PerfCountEnd);
-
-        return retval;
-    }
-    else
-    {
-        printf("\nError: invalid handle");
-        return FALSE;
-    }
-}
-
-BOOL Read_A8h(char DriveLetter, long int TargetSector, int NbSectors, bool FUAbit)
-{
-    BOOL retval;
-
-    if (hVolume != INVALID_HANDLE_VALUE)
-    {
-        DWORD dwBytesReturned;
-
-        InitSPTDStructureForREAD(12, NbSectors);
-
-        // build CDB
-        ClearCDB();
-        sptd.Cdb[0]  = 0xA8;
-        sptd.Cdb[1]  = (FUAbit << 3);
-        sptd.Cdb[2]  = byte((TargetSector>>24)&0xFF); // msb
-        sptd.Cdb[3]  = byte((TargetSector>>16)&0xFF);
-        sptd.Cdb[4]  = byte((TargetSector>>8)&0xFF);
-        sptd.Cdb[5]  = byte((TargetSector)&0xFF);     // lsb
-        sptd.Cdb[6]  = byte((NbSectors>>24)&0xFF);    // msb
-        sptd.Cdb[7]  = byte((NbSectors>>16)&0xFF);
-        sptd.Cdb[8]  = byte((NbSectors>>8)&0xFF);
-        sptd.Cdb[9]  = byte((NbSectors)&0xFF);        // lsb
-
-        // send command
-        MP_QueryPerformanceCounter(&PerfCountStart);
-        retval = DeviceIoControl(hVolume,IOCTL_SCSI_PASS_THROUGH_DIRECT,(PVOID)&sptd,
-                                 (DWORD)sizeof(SCSI_PASS_THROUGH_DIRECT), NULL, 0, &dwBytesReturned,NULL);
-        MP_QueryPerformanceCounter(&PerfCountEnd);
-
-        return retval;
-    }
-    else
-    {
-        printf("\nError: invalid handle");
-        return FALSE;
-    }
-}
-
-
-BOOL Read_D4h(char DriveLetter, long int TargetSector, int NbSectors, bool FUAbit)
-{
-    BOOL retval;
-
-    if (hVolume != INVALID_HANDLE_VALUE)
-    {
-        DWORD dwBytesReturned;
-
-        InitSPTDStructureForREAD(10, NbSectors);
-
-        // build CDB
-        ClearCDB();
-        sptd.Cdb[0]  = 0xD4;
-        sptd.Cdb[1]  = (FUAbit << 3);
-        sptd.Cdb[2]  = byte((TargetSector>>24)&0xFF); // msb
-        sptd.Cdb[3]  = byte((TargetSector>>16)&0xFF);
-        sptd.Cdb[4]  = byte((TargetSector>>8)&0xFF);
-        sptd.Cdb[5]  = byte((TargetSector)&0xFF);     // lsb
-        sptd.Cdb[6]  = byte((NbSectors>>16)&0xFF);
-        sptd.Cdb[7]  = byte((NbSectors>>8)&0xFF);
-        sptd.Cdb[8]  = byte((NbSectors)&0xFF);        // lsb
-
-        // send command
-        MP_QueryPerformanceCounter(&PerfCountStart);
-        retval = DeviceIoControl(hVolume,IOCTL_SCSI_PASS_THROUGH_DIRECT,(PVOID)&sptd,
-                                 (DWORD)sizeof(SCSI_PASS_THROUGH_DIRECT), NULL, 0, &dwBytesReturned,NULL);
-        MP_QueryPerformanceCounter(&PerfCountEnd);
-
-        return retval;
-    }
-    else
-    {
-        printf("\nError: invalid handle");
-        return FALSE;
-    }
-}
-
-
-BOOL Read_D5h(char DriveLetter, long int TargetSector, int NbSectors, bool FUAbit)
-{
-    BOOL retval;
-
-    if (hVolume != INVALID_HANDLE_VALUE)
-    {
-        DWORD dwBytesReturned;
-
-        InitSPTDStructureForREAD(10, NbSectors);
-
-        // build CDB
-        ClearCDB();
-        sptd.Cdb[0]  = 0xD5;
-        sptd.Cdb[1]  = (FUAbit << 3);
-        sptd.Cdb[2]  = byte((TargetSector>>24)&0xFF); // msb
-        sptd.Cdb[3]  = byte((TargetSector>>16)&0xFF);
-        sptd.Cdb[4]  = byte((TargetSector>>8)&0xFF);
-        sptd.Cdb[5]  = byte((TargetSector)&0xFF);     // lsb
-        sptd.Cdb[6]  = byte((NbSectors>>16)&0xFF);
-        sptd.Cdb[7]  = byte((NbSectors>>8)&0xFF);
-        sptd.Cdb[8]  = byte((NbSectors)&0xFF);        // lsb
-
-        // send command
-        MP_QueryPerformanceCounter(&PerfCountStart);
-        retval = DeviceIoControl(hVolume,IOCTL_SCSI_PASS_THROUGH_DIRECT,(PVOID)&sptd,
-                                 (DWORD)sizeof(SCSI_PASS_THROUGH_DIRECT), NULL, 0, &dwBytesReturned,NULL);
-        MP_QueryPerformanceCounter(&PerfCountEnd);
-
-        return retval;
-    }
-    else
-    {
-        printf("\nError: invalid handle");
-        return FALSE;
-    }
-}
-
-
-BOOL Read_D8h(char DriveLetter, long int TargetSector, int NbSectors, bool FUAbit)
-{
-    BOOL retval;
-
-    if (hVolume != INVALID_HANDLE_VALUE)
-    {
-        DWORD dwBytesReturned;
-
-        InitSPTDStructureForREAD(12, NbSectors);
-
-        // build CDB
-        ClearCDB();
-        sptd.Cdb[0]  = 0xD8;
-        sptd.Cdb[1]  = (FUAbit << 3);
-        sptd.Cdb[2]  = byte((TargetSector>>24)&0xFF); // msb
-        sptd.Cdb[3]  = byte((TargetSector>>16)&0xFF);
-        sptd.Cdb[4]  = byte((TargetSector>>8)&0xFF);
-        sptd.Cdb[5]  = byte((TargetSector)&0xFF);     // lsb
-        sptd.Cdb[6]  = byte((NbSectors>>24)&0xFF);    // msb
-        sptd.Cdb[7]  = byte((NbSectors>>16)&0xFF);
-        sptd.Cdb[8]  = byte((NbSectors>>8)&0xFF);
-        sptd.Cdb[9]  = byte((NbSectors)&0xFF);        // lsb
-
-        // send command
-        MP_QueryPerformanceCounter(&PerfCountStart);
-        retval = DeviceIoControl(hVolume,IOCTL_SCSI_PASS_THROUGH_DIRECT,(PVOID)&sptd,
-                                 (DWORD)sizeof(SCSI_PASS_THROUGH_DIRECT), NULL, 0, &dwBytesReturned,NULL);
-        MP_QueryPerformanceCounter(&PerfCountEnd);
-
-        return retval;
-    }
-    else
-    {
-        printf("\nError: invalid handle");
-        return FALSE;
-    }
-}
-
 
 //--------------------------------------------------------------------------------------------------------
 //-------------------------------------- Test functions --------------------------------------------------
@@ -1284,8 +1227,134 @@ int TestCacheLineSize_Wrap(char DriveLetter, unsigned char ReadCommand, long int
     return MaxCacheLineSize;
 }
 
+//--------------------------------------------------------------------------------------------------------
+// TestCacheLineSize_Stat
+//
+// finds cache line size with a single long burst read of NbMeasures * BurstSize sectors,
+// then try to find the cache size with statistical calculations
+//--------------------------------------------------------------------------------------------------------
+static int TestCacheLineSize_Stat(char DriveLetter, unsigned char ReadCommand, long int TargetSector, int NbMeasures, int BurstSize)
+{
+    int i,j;
+    int NbPeakMeasures;
+    double Maxdelay = 0.0;
+    double Threshold = 0.0;
+    double* Measures = NULL;
+    int CurrentDelta = 0;
+    int MostFrequentDeltaIndex = 0;
+    int MaxDeltaFrequency = 0;
 
+    Measures = (double*)malloc(NbMeasures * sizeof(double));
 
+    if (Measures == NULL)
+    {
+        printf("\nError: could not allocate measures buffer");
+        return(-1);
+    }
+
+    // init
+    for (i = 0; i < NBPEAKMEASURES; i++)
+    {
+        PeakMeasuresIndexes[i] = 0;
+        if (i < NBDELTA)
+        {
+            DeltaArray[i].delta     = 0;
+            DeltaArray[i].frequency = 0;
+            DeltaArray[i].divider   = 0;
+        }
+    }
+
+    // initial read.
+    ClearCache(DriveLetter);
+    Commands[ReadCommand].pFunc(DriveLetter, TargetSector, BurstSize, FALSE);
+    Measures[0] = ((double)PerfCountEnd.QuadPart - (double)PerfCountStart.QuadPart) / (double)freq.QuadPart;
+
+    // fill in measures buffer
+    for (i=1; i<NbMeasures; i++)
+    {
+        Commands[ReadCommand].pFunc(DriveLetter, TargetSector + i*BurstSize, BurstSize, FALSE);
+        Measures[i] = ((double)PerfCountEnd.QuadPart - (double)PerfCountStart.QuadPart) / (double)freq.QuadPart;
+    }
+
+    // find max time
+    Maxdelay = 0;
+    for (i=1; i<NbMeasures; i++)
+    {
+        if ( Measures[i] > Maxdelay) Maxdelay = Measures[i];
+    }
+    DEBUG("\ninitial: %.2f ms, max: %.2f ms",Measures[0], Maxdelay);
+
+    // find all values above 90% of max
+    Threshold = Maxdelay * ThresholdRatioMethod2;
+    for (i=1, NbPeakMeasures=0; (i < NbMeasures) && (NbPeakMeasures < NBPEAKMEASURES); i++)
+    {
+        if ( Measures[i] > Threshold) PeakMeasuresIndexes[NbPeakMeasures++] = i;
+    }
+    DEBUG("\nmeas: %d/%d above %.2f ms (%.2f)",NbPeakMeasures, NbMeasures, Threshold, ThresholdRatioMethod2);
+
+    // calculate stats on differences and keep max
+    for (i=1; i<NbPeakMeasures; i++)
+    {
+        CurrentDelta = PeakMeasuresIndexes[i] - PeakMeasuresIndexes[i-1];
+        SUPERDEBUG("\ndelta = %d", CurrentDelta);
+
+        for (j=0; j<NbPeakMeasures; j++)
+        {
+            // current delta already seen before
+            if (DeltaArray[j].delta == CurrentDelta)
+            {
+                DeltaArray[j].frequency++;
+                if (DeltaArray[j].frequency > MaxDeltaFrequency)
+                {
+                    MaxDeltaFrequency = DeltaArray[j].frequency;
+                    MostFrequentDeltaIndex = j;
+                }
+                break;
+            }
+
+            // new delta, count it in
+            if (DeltaArray[j].delta == 0)
+            {
+                DeltaArray[j].delta = CurrentDelta;
+                DeltaArray[j].frequency = 1;
+                if (DeltaArray[j].frequency > MaxDeltaFrequency)
+                {
+                    MaxDeltaFrequency = 1;
+                    MostFrequentDeltaIndex = j;
+                }
+                break;
+            }
+        }
+    }
+
+    // find which sizes are multiples of others
+    for (i=0 ; DeltaArray[i].delta != 0 ; i++)
+    {
+        for (j=0 ; DeltaArray[j].delta != 0 ; j++)
+        {
+            if ((DeltaArray[j].delta % DeltaArray[i].delta == 0) && (i!=j))
+            {
+                DeltaArray[i].divider++;
+            }
+        }
+    }
+
+    printf("\nsizes: ");
+    for (i=0 ; DeltaArray[i].delta != 0 ; i++)
+    {
+        if (i%5==0) printf("\n");
+        printf(" %d (%d%%, div=%d)",DeltaArray[i].delta,
+               (int)(100 * DeltaArray[i].frequency / NbPeakMeasures),
+               DeltaArray[i].divider);
+    }
+
+    printf("\nfmax = %d (%d%%) : %d kB, %d sectors",
+           DeltaArray[MostFrequentDeltaIndex].frequency,
+           (int)(100 * DeltaArray[MostFrequentDeltaIndex].frequency / NbPeakMeasures),
+           (int)((DeltaArray[MostFrequentDeltaIndex].delta*2352)/1024),
+           DeltaArray[MostFrequentDeltaIndex].delta);
+    return(MostFrequentDeltaIndex);
+}
 
 // wrapper for TestCacheLineSize
 int TestCacheLineSizeWrapper(char DriveLetter, long int TargetSector, int NbMeasures, int BurstSize, short method)
@@ -1494,136 +1563,6 @@ int TestPlextorFUAInvalidationSizeWrapper(char DriveLetter, long int TargetSecto
     }
     return retval;
 }
-
-//--------------------------------------------------------------------------------------------------------
-// TestCacheLineSize_Stat
-//
-// finds cache line size with a single long burst read of NbMeasures * BurstSize sectors,
-// then try to find the cache size with statistical calculations
-//--------------------------------------------------------------------------------------------------------
-int TestCacheLineSize_Stat(char DriveLetter, unsigned char ReadCommand, long int TargetSector, int NbMeasures, int BurstSize)
-{
-    int i,j;
-    int NbPeakMeasures;
-    double Maxdelay = 0.0;
-    double Threshold = 0.0;
-    double* Measures = NULL;
-    int CurrentDelta = 0;
-    int MostFrequentDeltaIndex = 0;
-    int MaxDeltaFrequency = 0;
-
-    Measures = (double*)malloc(NbMeasures * sizeof(double));
-
-    if (Measures == NULL)
-    {
-        printf("\nError: could not allocate measures buffer");
-        return(-1);
-    }
-
-    // init
-    for (i = 0; i < NBPEAKMEASURES; i++)
-    {
-        PeakMeasuresIndexes[i] = 0;
-        if (i < NBDELTA)
-        {
-            DeltaArray[i].delta     = 0;
-            DeltaArray[i].frequency = 0;
-            DeltaArray[i].divider   = 0;
-        }
-    }
-
-    // initial read.
-    ClearCache(DriveLetter);
-    Commands[ReadCommand].pFunc(DriveLetter, TargetSector, BurstSize, FALSE);
-    Measures[0] = ((double)PerfCountEnd.QuadPart - (double)PerfCountStart.QuadPart) / (double)freq.QuadPart;
-
-    // fill in measures buffer
-    for (i=1; i<NbMeasures; i++)
-    {
-        Commands[ReadCommand].pFunc(DriveLetter, TargetSector + i*BurstSize, BurstSize, FALSE);
-        Measures[i] = ((double)PerfCountEnd.QuadPart - (double)PerfCountStart.QuadPart) / (double)freq.QuadPart;
-    }
-
-    // find max time
-    Maxdelay = 0;
-    for (i=1; i<NbMeasures; i++)
-    {
-        if ( Measures[i] > Maxdelay) Maxdelay = Measures[i];
-    }
-    DEBUG("\ninitial: %.2f ms, max: %.2f ms",Measures[0], Maxdelay);
-
-    // find all values above 90% of max
-    Threshold = Maxdelay * ThresholdRatioMethod2;
-    for (i=1, NbPeakMeasures=0; (i < NbMeasures) && (NbPeakMeasures < NBPEAKMEASURES); i++)
-    {
-        if ( Measures[i] > Threshold) PeakMeasuresIndexes[NbPeakMeasures++] = i;
-    }
-    DEBUG("\nmeas: %d/%d above %.2f ms (%.2f)",NbPeakMeasures, NbMeasures, Threshold, ThresholdRatioMethod2);
-
-    // calculate stats on differences and keep max
-    for (i=1; i<NbPeakMeasures; i++)
-    {
-        CurrentDelta = PeakMeasuresIndexes[i] - PeakMeasuresIndexes[i-1];
-        SUPERDEBUG("\ndelta = %d", CurrentDelta);
-
-        for (j=0; j<NbPeakMeasures; j++)
-        {
-            // current delta already seen before
-            if (DeltaArray[j].delta == CurrentDelta)
-            {
-                DeltaArray[j].frequency++;
-                if (DeltaArray[j].frequency > MaxDeltaFrequency)
-                {
-                    MaxDeltaFrequency = DeltaArray[j].frequency;
-                    MostFrequentDeltaIndex = j;
-                }
-                break;
-            }
-
-            // new delta, count it in
-            if (DeltaArray[j].delta == 0)
-            {
-                DeltaArray[j].delta = CurrentDelta;
-                DeltaArray[j].frequency = 1;
-                if (DeltaArray[j].frequency > MaxDeltaFrequency)
-                {
-                    MaxDeltaFrequency = 1;
-                    MostFrequentDeltaIndex = j;
-                }
-                break;
-            }
-        }
-    }
-
-    // find which sizes are multiples of others
-    for (i=0 ; DeltaArray[i].delta != 0 ; i++)
-    {
-        for (j=0 ; DeltaArray[j].delta != 0 ; j++)
-        {
-            if ((DeltaArray[j].delta % DeltaArray[i].delta == 0) && (i!=j))
-            {
-                DeltaArray[i].divider++;
-            }
-        }
-    }
-
-    printf("\nsizes: ");
-    for (i=0 ; DeltaArray[i].delta != 0 ; i++)
-    {
-        if (i%5==0) printf("\n");
-        printf(" %d (%d%%, div=%d)",DeltaArray[i].delta,
-               (int)(100 * DeltaArray[i].frequency / NbPeakMeasures),
-               DeltaArray[i].divider);
-    }
-
-    printf("\nfmax = %d (%d%%) : %d kB, %d sectors",
-           DeltaArray[MostFrequentDeltaIndex].frequency,
-           (int)(100 * DeltaArray[MostFrequentDeltaIndex].frequency / NbPeakMeasures),
-           (int)((DeltaArray[MostFrequentDeltaIndex].delta*2352)/1024),
-           DeltaArray[MostFrequentDeltaIndex].delta);
-    return(MostFrequentDeltaIndex);
-}
-
 
 BOOL TestRCDBitSupport(char DriveLetter, long int TargetSector)
 {
