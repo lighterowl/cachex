@@ -124,15 +124,6 @@ static void MP_QueryPerformanceCounter(LARGE_INTEGER* lpCounter)
     SetThreadAffinityMask(hCurThread, dwOldMask);
 }
 
-static void ClearCDB()
-{
-    int i;
-    for (i=0; i<16; i++)
-    {
-        sptd.Cdb[i] = 0;
-    }
-}
-
 namespace Command {
   std::array<std::uint8_t, 12> Read_A8h(long int TargetSector, int NbSectors, bool FUAbit) {
     std::array<std::uint8_t, 12> rv = {
