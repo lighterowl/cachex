@@ -4,7 +4,9 @@
 #include <windows.h>
 #include <winioctl.h>
 #include <stdio.h>
-#include "my_ntddscsi.h"
+#include <ntddscsi.h>
+#define _NTSCSI_USER_MODE_
+#include <scsi.h>
 
 //#define RELEASE_VERSION
 #undef RELEASE_VERSION
