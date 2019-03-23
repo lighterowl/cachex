@@ -4,43 +4,55 @@
 #include <cstdint>
 #include <cstdio>
 
+#include <algorithm>
 #include <array>
 #include <vector>
-#include <algorithm>
 
-#define SCSISTAT_GOOD                  0x00
-#define SCSISTAT_CHECK_CONDITION       0x02
-#define SCSISTAT_CONDITION_MET         0x04
-#define SCSISTAT_BUSY                  0x08
-#define SCSISTAT_INTERMEDIATE          0x10
+#define SCSISTAT_GOOD 0x00
+#define SCSISTAT_CHECK_CONDITION 0x02
+#define SCSISTAT_CONDITION_MET 0x04
+#define SCSISTAT_BUSY 0x08
+#define SCSISTAT_INTERMEDIATE 0x10
 #define SCSISTAT_INTERMEDIATE_COND_MET 0x14
-#define SCSISTAT_RESERVATION_CONFLICT  0x18
-#define SCSISTAT_COMMAND_TERMINATED    0x22
-#define SCSISTAT_QUEUE_FULL            0x28
+#define SCSISTAT_RESERVATION_CONFLICT 0x18
+#define SCSISTAT_COMMAND_TERMINATED 0x22
+#define SCSISTAT_QUEUE_FULL 0x28
 
-struct CommandResult {
-  CommandResult(unsigned int NumOutBytes):Valid(false), Duration(0.0), ScsiStatus(0xff), Data(NumOutBytes) {}
+struct CommandResult
+{
+    CommandResult(unsigned int NumOutBytes)
+        : Valid(false), Duration(0.0), ScsiStatus(0xff), Data(NumOutBytes)
+    {
+    }
 
-  bool Valid;
-  double Duration;
-  std::uint8_t ScsiStatus;
-  std::vector<std::uint8_t> Data;
+    bool Valid;
+    double Duration;
+    std::uint8_t ScsiStatus;
+    std::vector<std::uint8_t> Data;
 };
 
 #ifdef _WIN32
 #include "cachex_win.h"
 #else
-struct platform {
-  typedef int device_handle;
-  static device_handle open_volume(char DriveLetter) { return 0; }
-  static bool handle_is_valid(device_handle h) { return false; }
-  static void close_handle(device_handle h) {}
-  static std::uint32_t monotonic_clock() { static std::uint32_t val = 0; return val++; }
-  static void set_critical_priority() {}
-  static void set_normal_priority() {}
+struct platform
+{
+    typedef int device_handle;
+    static device_handle open_volume(char DriveLetter) { return 0; }
+    static bool handle_is_valid(device_handle h) { return false; }
+    static void close_handle(device_handle h) {}
+    static std::uint32_t monotonic_clock()
+    {
+        static std::uint32_t val = 0;
+        return val++;
+    }
+    static void set_critical_priority() {}
+    static void set_normal_priority() {}
 
-  template<std::size_t CDBLength>
-  static void exec_command(CommandResult& rv, const std::array<std::uint8_t, CDBLength> &cdb) {}
+    template <std::size_t CDBLength>
+    static void exec_command(CommandResult &rv,
+                             const std::array<std::uint8_t, CDBLength> &cdb)
+    {
+    }
 };
 #endif
 
@@ -49,72 +61,77 @@ struct platform {
 //--------------------------------------------------------------------------------------------------------
 //------------------------------------------ CONSTANTS ---------------------------------------------------
 //--------------------------------------------------------------------------------------------------------
-#define NBPEAKMEASURES           100
-#define NBDELTA                   50
-#define MAX_CACHE_LINES           10
-#define NB_IGNORE_MEASURES         5
-#define NB_READ_COMMANDS           6
+#define NBPEAKMEASURES 100
+#define NBDELTA 50
+#define MAX_CACHE_LINES 10
+#define NB_IGNORE_MEASURES 5
+#define NB_READ_COMMANDS 6
 
+#define DESCRIPTOR_BLOCK_1                                                     \
+    8 // offset of first block descriptor = size of mode parameter header
 
-#define DESCRIPTOR_BLOCK_1         8   // offset of first block descriptor = size of mode parameter header
+#define CACHING_MODE_PAGE 0x08
+#define CD_DVD_CAPABILITIES_PAGE 0x2A
 
-#define CACHING_MODE_PAGE         0x08
-#define CD_DVD_CAPABILITIES_PAGE  0x2A
-
-#define RCD_BIT                    1
-#define RCD_READ_CACHE_ENABLED     0
-#define RCD_READ_CACHE_DISABLED    1
+#define RCD_BIT 1
+#define RCD_READ_CACHE_ENABLED 0
+#define RCD_READ_CACHE_DISABLED 1
 
 //--------------------------------------------------------------------------------------------------------
 //------------------------------------------- DEBUG ----------------------------------------------------
 //--------------------------------------------------------------------------------------------------------
-#define DEBUG(fmt, ...) if (DebugMode) printf(fmt, __VA_ARGS__);
+#define DEBUG(fmt, ...)                                                        \
+    if (DebugMode)                                                             \
+        printf(fmt, __VA_ARGS__);
 
-#define SUPERDEBUG(fmt, ...) if (SuperDebugMode) printf(fmt, __VA_ARGS__);
+#define SUPERDEBUG(fmt, ...)                                                   \
+    if (SuperDebugMode)                                                        \
+        printf(fmt, __VA_ARGS__);
 //--------------------------------------------------------------------------------------------------------
 //------------------------------------------- STRINGS ----------------------------------------------------
 //--------------------------------------------------------------------------------------------------------
 #ifndef RELEASE_VERSION
-#define TESTINGSTRING  "\n[+] Testing %Xh... "
+#define TESTINGSTRING "\n[+] Testing %Xh... "
 #define SUPPORTEDREADCOMMANDS "\n[+] Supported read commands:"
-#define FUATEST        " FUA:"
-#define FUAMSG         "(FUA)"
-#define NOTSUPPORTED   "not supported"
-#define OK             "ok"
-#define ACCEPTED       "accepted"
-#define REJECTED       "rejected"
+#define FUATEST " FUA:"
+#define FUAMSG "(FUA)"
+#define NOTSUPPORTED "not supported"
+#define OK "ok"
+#define ACCEPTED "accepted"
+#define REJECTED "rejected"
 #define TESTINGPLEXFUA "\n[+] Plextor flush command: "
 #define TESTINGPLEXFUA2 "\n[+] Testing invalidation of Plextor flush command: "
 #define AVERAGE_NORMAL "\n[+] Read at %d, %.2f ms"
-#define AVERAGE_FUA    ", with FUA %f"
-#define CACHELINESIZE  "\n[+] Cache line avg size (%d) = %5.0f kb"
-#define CACHELINENB    "\n[+] Cache line numbers (%d) = %d"
-#define READCOMMANDSNOTTESTED "\nError: No read command specified, use -i or -r switch\n"
+#define AVERAGE_FUA ", with FUA %f"
+#define CACHELINESIZE "\n[+] Cache line avg size (%d) = %5.0f kb"
+#define CACHELINENB "\n[+] Cache line numbers (%d) = %d"
+#define READCOMMANDSNOTTESTED                                                  \
+    "\nError: No read command specified, use -i or -r switch\n"
 #define FUAINVALIDATIONSIZE "\n-> Invalidated : %d sectors"
 #define CACHELINENBTEST "\n[+] Testing cache line numbers:"
 #define CACHELINESIZETEST "\n[+] Testing cache line size (method %d):"
 #define CACHELINESIZETEST2 "\n[+] Testing cache line size:"
-#define SPINNINGDRIVE  "\ninfo: spinning the drive... "
+#define SPINNINGDRIVE "\ninfo: spinning the drive... "
 #define CACHELINESIZE2 "\n %d kB / %d sectors"
 #else
-#define TESTINGSTRING  "%X"
+#define TESTINGSTRING "%X"
 #define SUPPORTEDREADCOMMANDS "\nSRC:"
-#define FUATEST        "|"
-#define NOTSUPPORTED   "-"
-#define OK             "+"
-#define ACCEPTED       "accepted"
-#define REJECTED       "rejected"
-#define FUA            ""
-#define FUAMSG         "f"
+#define FUATEST "|"
+#define NOTSUPPORTED "-"
+#define OK "+"
+#define ACCEPTED "accepted"
+#define REJECTED "rejected"
+#define FUA ""
+#define FUAMSG "f"
 #define TESTINGPLEXFUA " PF:"
 #define AVERAGE_NORMAL "\n0x%2X avn = %f"
-#define AVERAGE_FUA    " avf = %f"
-#define CACHELINESIZE  "\ncls(%d) = %5.0f"
-#define CACHELINENB    "\ncln(%d) = %d"
+#define AVERAGE_FUA " avf = %f"
+#define CACHELINESIZE "\ncls(%d) = %5.0f"
+#define CACHELINENB "\ncln(%d) = %d"
 #define READCOMMANDSNOTTESTED ""
 #define FUAINVALIDATIONSIZE "\ninvfua = %d"
-#define SPINNINGDRIVE  ""
-#define CACHELINESIZE2  "\n%d (%.2f / %.2f -> %.2f)"
+#define SPINNINGDRIVE ""
+#define CACHELINESIZE2 "\n%d (%.2f / %.2f -> %.2f)"
 #endif
 
 // global variables
@@ -140,222 +157,256 @@ typedef struct
 } sDeltaArray;
 static sDeltaArray DeltaArray[NBDELTA];
 
-namespace Command {
-  std::array<std::uint8_t, 12> Read_A8h(long int TargetSector, int NbSectors, bool FUAbit) {
-    std::array<std::uint8_t, 12> rv = {
-          0xA8,
-          (FUAbit << 3),
-          (TargetSector>>24)&0xFF, // msb
-          (TargetSector>>16)&0xFF,
-          (TargetSector>>8)&0xFF,
-          (TargetSector)&0xFF,     // lsb
-          (NbSectors>>24)&0xFF,    // msb
-          (NbSectors>>16)&0xFF,
-          (NbSectors>>8)&0xFF,
-          (NbSectors)&0xFF,        // lsb
-          0, 0
-    };
+namespace Command
+{
+std::array<std::uint8_t, 12> Read_A8h(long int TargetSector, int NbSectors,
+                                      bool FUAbit)
+{
+    std::array<std::uint8_t, 12> rv = {0xA8,
+                                       (FUAbit << 3),
+                                       (TargetSector >> 24) & 0xFF, // msb
+                                       (TargetSector >> 16) & 0xFF,
+                                       (TargetSector >> 8) & 0xFF,
+                                       (TargetSector)&0xFF,      // lsb
+                                       (NbSectors >> 24) & 0xFF, // msb
+                                       (NbSectors >> 16) & 0xFF,
+                                       (NbSectors >> 8) & 0xFF,
+                                       (NbSectors)&0xFF, // lsb
+                                       0,
+                                       0};
     return rv;
-  }
+}
 
-  std::array<std::uint8_t, 10> Read_28h(long int TargetSector, int NbSectors, bool FUAbit) {
+std::array<std::uint8_t, 10> Read_28h(long int TargetSector, int NbSectors,
+                                      bool FUAbit)
+{
     std::array<std::uint8_t, 10> rv = {
-      0x28,
-      (FUAbit << 3),
-      uint8_t((TargetSector>>24)&0xFF), // msb
-      uint8_t((TargetSector>>16)&0xFF),
-      uint8_t((TargetSector>>8)&0xFF),
-      uint8_t((TargetSector)&0xFF),     // lsb
-      0,
-      uint8_t((NbSectors>>8)&0xFF),     // msb
-      uint8_t((NbSectors)&0xFF),        // lsb
-      0
-    };
+        0x28,
+        (FUAbit << 3),
+        uint8_t((TargetSector >> 24) & 0xFF), // msb
+        uint8_t((TargetSector >> 16) & 0xFF),
+        uint8_t((TargetSector >> 8) & 0xFF),
+        uint8_t((TargetSector)&0xFF), // lsb
+        0,
+        uint8_t((NbSectors >> 8) & 0xFF), // msb
+        uint8_t((NbSectors)&0xFF),        // lsb
+        0};
     return rv;
-  }
+}
 
-  std::array<std::uint8_t, 12> Read_BEh(long int TargetSector, int NbSectors) {
+std::array<std::uint8_t, 12> Read_BEh(long int TargetSector, int NbSectors)
+{
     std::array<std::uint8_t, 12> rv = {
-      0xBE,
-      0x00,                             // 0x04 = audio data only, 0x00 = any type
-      uint8_t((TargetSector>>24)&0xFF), // address
-      uint8_t((TargetSector>>16)&0xFF),
-      uint8_t((TargetSector>>8)&0xFF),
-      uint8_t((TargetSector)&0xFF),
-      uint8_t((NbSectors>>16)&0xFF),    // size
-      uint8_t((NbSectors>>8)&0xFF),
-      uint8_t((NbSectors)&0xFF),
-      0x10,                             // just data
-      0,                                // no subcode
-      0
-    };
+        0xBE,
+        0x00, // 0x04 = audio data only, 0x00 = any type
+        uint8_t((TargetSector >> 24) & 0xFF), // address
+        uint8_t((TargetSector >> 16) & 0xFF),
+        uint8_t((TargetSector >> 8) & 0xFF),
+        uint8_t((TargetSector)&0xFF),
+        uint8_t((NbSectors >> 16) & 0xFF), // size
+        uint8_t((NbSectors >> 8) & 0xFF),
+        uint8_t((NbSectors)&0xFF),
+        0x10, // just data
+        0,    // no subcode
+        0};
     return rv;
-  }
+}
 
-  std::array<std::uint8_t, 10> Read_D4h(long int TargetSector, int NbSectors, bool FUAbit) {
+std::array<std::uint8_t, 10> Read_D4h(long int TargetSector, int NbSectors,
+                                      bool FUAbit)
+{
     std::array<std::uint8_t, 10> rv = {
-    0xD4,
-    (FUAbit << 3),
-    uint8_t((TargetSector>>24)&0xFF), // msb
-    uint8_t((TargetSector>>16)&0xFF),
-    uint8_t((TargetSector>>8)&0xFF),
-    uint8_t((TargetSector)&0xFF),     // lsb
-    uint8_t((NbSectors>>16)&0xFF),
-    uint8_t((NbSectors>>8)&0xFF),
-    uint8_t((NbSectors)&0xFF),        // lsb
-    0
-    };
+        0xD4,
+        (FUAbit << 3),
+        uint8_t((TargetSector >> 24) & 0xFF), // msb
+        uint8_t((TargetSector >> 16) & 0xFF),
+        uint8_t((TargetSector >> 8) & 0xFF),
+        uint8_t((TargetSector)&0xFF), // lsb
+        uint8_t((NbSectors >> 16) & 0xFF),
+        uint8_t((NbSectors >> 8) & 0xFF),
+        uint8_t((NbSectors)&0xFF), // lsb
+        0};
     return rv;
-  }
+}
 
-  std::array<std::uint8_t, 10> Read_D5h(long int TargetSector, int NbSectors, bool FUAbit) {
+std::array<std::uint8_t, 10> Read_D5h(long int TargetSector, int NbSectors,
+                                      bool FUAbit)
+{
     std::array<std::uint8_t, 10> rv = {
-    0xD5,
-    (FUAbit << 3),
-    uint8_t((TargetSector>>24)&0xFF), // msb
-    uint8_t((TargetSector>>16)&0xFF),
-    uint8_t((TargetSector>>8)&0xFF),
-    uint8_t((TargetSector)&0xFF),     // lsb
-    uint8_t((NbSectors>>16)&0xFF),
-    uint8_t((NbSectors>>8)&0xFF),
-    uint8_t((NbSectors)&0xFF),        // lsb
-    0
-    };
+        0xD5,
+        (FUAbit << 3),
+        uint8_t((TargetSector >> 24) & 0xFF), // msb
+        uint8_t((TargetSector >> 16) & 0xFF),
+        uint8_t((TargetSector >> 8) & 0xFF),
+        uint8_t((TargetSector)&0xFF), // lsb
+        uint8_t((NbSectors >> 16) & 0xFF),
+        uint8_t((NbSectors >> 8) & 0xFF),
+        uint8_t((NbSectors)&0xFF), // lsb
+        0};
     return rv;
-  }
+}
 
-  std::array<std::uint8_t, 12> Read_D8h(long int TargetSector, int NbSectors, bool FUAbit) {
+std::array<std::uint8_t, 12> Read_D8h(long int TargetSector, int NbSectors,
+                                      bool FUAbit)
+{
     std::array<std::uint8_t, 12> rv = {
-    0xD8,
-    (FUAbit << 3),
-    uint8_t((TargetSector>>24)&0xFF), // msb
-    uint8_t((TargetSector>>16)&0xFF),
-    uint8_t((TargetSector>>8)&0xFF),
-    uint8_t((TargetSector)&0xFF),     // lsb
-    uint8_t((NbSectors>>24)&0xFF),    // msb
-    uint8_t((NbSectors>>16)&0xFF),
-    uint8_t((NbSectors>>8)&0xFF),
-    uint8_t((NbSectors)&0xFF),        // lsb
-    0, 0
-    };
+        0xD8,
+        (FUAbit << 3),
+        uint8_t((TargetSector >> 24) & 0xFF), // msb
+        uint8_t((TargetSector >> 16) & 0xFF),
+        uint8_t((TargetSector >> 8) & 0xFF),
+        uint8_t((TargetSector)&0xFF),      // lsb
+        uint8_t((NbSectors >> 24) & 0xFF), // msb
+        uint8_t((NbSectors >> 16) & 0xFF),
+        uint8_t((NbSectors >> 8) & 0xFF),
+        uint8_t((NbSectors)&0xFF), // lsb
+        0,
+        0};
     return rv;
-  }
+}
 
-  std::array<std::uint8_t, 12> PlextorFUAFlush(long int TargetSector) {
+std::array<std::uint8_t, 12> PlextorFUAFlush(long int TargetSector)
+{
     // this is just a Read28h with NbSectors = 0 and FUAbit = true. however, the original
     // code declared the CDB size as 12. whether this was a typo or not remains unknown,
     // which is why this code replicates the original behaviour.
     std::array<std::uint8_t, 12> rv = {
-    0x28,       // READ(10) command
-    0x08,       // FUA
-    uint8_t((TargetSector>>24)&0xFF), // msb
-    uint8_t((TargetSector>>16)&0xFF),
-    uint8_t((TargetSector>>8)&0xFF),
-    uint8_t((TargetSector)&0xFF),     // lsb
-    0, 0, 0, 0, 0, 0
-    // size stays zero, that's how this command works
-    // MMC spec specifies that "A Transfer Length of zero indicates that no
-    // logical blocks shall be transferred. This condition shall not be
-    // considered an error"
+        0x28,                                 // READ(10) command
+        0x08,                                 // FUA
+        uint8_t((TargetSector >> 24) & 0xFF), // msb
+        uint8_t((TargetSector >> 16) & 0xFF),
+        uint8_t((TargetSector >> 8) & 0xFF),
+        uint8_t((TargetSector)&0xFF), // lsb
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+        // size stays zero, that's how this command works
+        // MMC spec specifies that "A Transfer Length of zero indicates that no
+        // logical blocks shall be transferred. This condition shall not be
+        // considered an error"
     };
     return rv;
-  }
-  
-  std::array<std::uint8_t, 6> RequestSense(std::uint8_t AllocationLength) {
-    std::array<std::uint8_t, 6> rv = {
-    3,                  // REQUEST SENSE
-    0, 0, 0,
-    AllocationLength,   // allocation size
-    0
-    };
-    return rv;
-  }
+}
 
-  std::array<std::uint8_t, 10> ModeSense(unsigned char PageCode, unsigned char SubPageCode, int size) {
-    std::array<std::uint8_t, 10> rv = {
-    0x5A,                     // MODE SENSE(10)
-    0,
-    PageCode,
-    SubPageCode,
-    0, 0, 0,
-    uint8_t((size>>8)&0xFF),     // size
-    uint8_t((size)&0xFF),
-    0
-    };
+std::array<std::uint8_t, 6> RequestSense(std::uint8_t AllocationLength)
+{
+    std::array<std::uint8_t, 6> rv = {3, // REQUEST SENSE
+                                      0,
+                                      0,
+                                      0,
+                                      AllocationLength, // allocation size
+                                      0};
     return rv;
-  }
+}
 
-  std::array<std::uint8_t, 10> ModeSelect(unsigned char PageCode, unsigned char SubPageCode, int size) {
+std::array<std::uint8_t, 10> ModeSense(unsigned char PageCode,
+                                       unsigned char SubPageCode, int size)
+{
+    std::array<std::uint8_t, 10> rv = {0x5A, // MODE SENSE(10)
+                                       0,
+                                       PageCode,
+                                       SubPageCode,
+                                       0,
+                                       0,
+                                       0,
+                                       uint8_t((size >> 8) & 0xFF), // size
+                                       uint8_t((size)&0xFF),
+                                       0};
+    return rv;
+}
+
+std::array<std::uint8_t, 10> ModeSelect(unsigned char PageCode,
+                                        unsigned char SubPageCode, int size)
+{
     // SPC-4 declares bytes 2 to 6 of MODE SELECT as reserved - they should thus be set to zero. this replicates the behaviour of the original code,
     // which puts the page and subpage codes there. this might've been just a copypasta error, though, since
     // the assignment of the operation code contained a "MODE SENSE(10)".
+    std::array<std::uint8_t, 10> rv = {0x55, // MODE SENSE(10)
+                                       0,
+                                       PageCode,
+                                       SubPageCode,
+                                       0,
+                                       0,
+                                       0,
+                                       uint8_t((size >> 8) & 0xFF), // size
+                                       uint8_t((size)&0xFF),
+                                       0};
+    return rv;
+}
+
+std::array<std::uint8_t, 10> Prefetch(long int TargetSector,
+                                      unsigned int NbSectors)
+{
     std::array<std::uint8_t, 10> rv = {
-    0x55,                     // MODE SENSE(10)
-    0,
-    PageCode,
-    SubPageCode,
-    0, 0, 0,
-    uint8_t((size>>8)&0xFF),     // size
-    uint8_t((size)&0xFF),
-    0
-    };
+        0x34, // PREFETCH
+        0,
+        uint8_t((TargetSector >> 24) & 0xFF), // target sector
+        uint8_t((TargetSector >> 16) & 0xFF),
+        uint8_t((TargetSector >> 8) & 0xFF),
+        uint8_t((TargetSector)&0xFF),
+        0,
+        uint8_t((NbSectors >> 8) & 0xFF), // size
+        uint8_t((NbSectors)&0xFF),
+        0};
     return rv;
-  }
+}
 
-  std::array<std::uint8_t, 10> Prefetch(long int TargetSector, unsigned int NbSectors) {
-    std::array<std::uint8_t, 10> rv = {
-    0x34,    // PREFETCH
-    0,
-    uint8_t((TargetSector>>24)&0xFF), // target sector
-    uint8_t((TargetSector>>16)&0xFF),
-    uint8_t((TargetSector>>8)&0xFF),
-    uint8_t((TargetSector)&0xFF),
-    0,
-    uint8_t((NbSectors>>8)&0xFF),     // size
-    uint8_t((NbSectors)&0xFF),
-    0
-    };
+std::array<std::uint8_t, 6> Inquiry(std::uint8_t AllocationLength)
+{
+    std::array<std::uint8_t, 6> rv = {0x12, 0, 0, 0, AllocationLength, 0};
     return rv;
-  }
+}
 
-  std::array<std::uint8_t, 6> Inquiry(std::uint8_t AllocationLength) {
-    std::array<std::uint8_t, 6> rv = { 0x12, 0, 0, 0, AllocationLength, 0 };
-    return rv;
-  }
-
-  std::array<std::uint8_t, 12> SetCDSpeed(unsigned char ReadSpeedX, unsigned char WriteSpeedX) {
-    unsigned int ReadSpeedkB  = (ReadSpeedX  * 176) + 2;  // 1x CD = 176kB/s
+std::array<std::uint8_t, 12> SetCDSpeed(unsigned char ReadSpeedX,
+                                        unsigned char WriteSpeedX)
+{
+    unsigned int ReadSpeedkB = (ReadSpeedX * 176) + 2; // 1x CD = 176kB/s
     unsigned int WriteSpeedkB = (WriteSpeedX * 176);
     std::array<std::uint8_t, 12> rv = {
-    0xBB,    // SET CD SPEED
-    0,
-    (ReadSpeedX == 0) ? 0xFF : (ReadSpeedkB>>8)&0xFF,
-    (ReadSpeedX == 0) ? 0xFF : ReadSpeedkB&0xFF,
-    (WriteSpeedkB>>8)&0xFF,
-     WriteSpeedkB&0xFF,
-    0, 0, 0, 0, 0, 0
-    };
+        0xBB, // SET CD SPEED
+        0,
+        (ReadSpeedX == 0) ? 0xFF : (ReadSpeedkB >> 8) & 0xFF,
+        (ReadSpeedX == 0) ? 0xFF : ReadSpeedkB & 0xFF,
+        (WriteSpeedkB >> 8) & 0xFF,
+        WriteSpeedkB & 0xFF,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0};
     return rv;
-  }
+}
+} // namespace Command
+
+template <std::size_t CDBLength>
+static void ExecCommand(CommandResult &rv,
+                        const std::array<std::uint8_t, CDBLength> &cdb)
+{
+    platform::exec_command(rv, cdb);
 }
 
-template<std::size_t CDBLength>
-static void ExecCommand(CommandResult& rv, const std::array<std::uint8_t, CDBLength> &cdb) {
-  platform::exec_command(rv, cdb);
+template <std::size_t CDBLength>
+static CommandResult
+ExecSectorCommand(unsigned int NbSectors,
+                  const std::array<std::uint8_t, CDBLength> &cdb)
+{
+    CommandResult rv(2448 * NbSectors);
+    ExecCommand(rv, cdb);
+    return rv;
 }
 
-template<std::size_t CDBLength>
-static CommandResult ExecSectorCommand(unsigned int NbSectors, const std::array<std::uint8_t, CDBLength> &cdb) {
-  CommandResult rv(2448 * NbSectors);
-  ExecCommand(rv, cdb);
-  return rv;
-}
-
-template<std::size_t CDBLength>
-static CommandResult ExecBytesCommand(unsigned int NbBytes, const std::array<std::uint8_t, CDBLength> &cdb) {
-  CommandResult rv(NbBytes);
-  ExecCommand(rv, cdb);
-  return rv;
+template <std::size_t CDBLength>
+static CommandResult
+ExecBytesCommand(unsigned int NbBytes,
+                 const std::array<std::uint8_t, CDBLength> &cdb)
+{
+    CommandResult rv(NbBytes);
+    ExecCommand(rv, cdb);
+    return rv;
 }
 
 //--------------------------------------------------------------------------------------------------------
@@ -364,32 +415,38 @@ static CommandResult ExecBytesCommand(unsigned int NbBytes, const std::array<std
 
 static CommandResult Read_A8h(long int TargetSector, int NbSectors, bool FUAbit)
 {
-    return ExecSectorCommand(NbSectors, Command::Read_A8h(TargetSector, NbSectors, FUAbit));
+    return ExecSectorCommand(
+        NbSectors, Command::Read_A8h(TargetSector, NbSectors, FUAbit));
 }
 
 static CommandResult Read_28h(long int TargetSector, int NbSectors, bool FUAbit)
 {
-    return ExecSectorCommand(NbSectors, Command::Read_28h(TargetSector, NbSectors, FUAbit));
+    return ExecSectorCommand(
+        NbSectors, Command::Read_28h(TargetSector, NbSectors, FUAbit));
 }
 
 static CommandResult Read_BEh(long int TargetSector, int NbSectors, bool FUAbit)
 {
-    return ExecSectorCommand(NbSectors, Command::Read_BEh(TargetSector, NbSectors));
+    return ExecSectorCommand(NbSectors,
+                             Command::Read_BEh(TargetSector, NbSectors));
 }
 
 static CommandResult Read_D4h(long int TargetSector, int NbSectors, bool FUAbit)
 {
-    return ExecSectorCommand(NbSectors, Command::Read_D4h(TargetSector, NbSectors, FUAbit));
+    return ExecSectorCommand(
+        NbSectors, Command::Read_D4h(TargetSector, NbSectors, FUAbit));
 }
 
 static CommandResult Read_D5h(long int TargetSector, int NbSectors, bool FUAbit)
 {
-    return ExecSectorCommand(NbSectors, Command::Read_D5h(TargetSector, NbSectors, FUAbit));
+    return ExecSectorCommand(
+        NbSectors, Command::Read_D5h(TargetSector, NbSectors, FUAbit));
 }
 
 static CommandResult Read_D8h(long int TargetSector, int NbSectors, bool FUAbit)
 {
-    return ExecSectorCommand(NbSectors, Command::Read_D8h(TargetSector, NbSectors, FUAbit));
+    return ExecSectorCommand(
+        NbSectors, Command::Read_D8h(TargetSector, NbSectors, FUAbit));
 }
 
 // drive characteristics
@@ -406,13 +463,9 @@ typedef struct
 } sReadCommand;
 
 static sReadCommand Commands[NB_READ_COMMANDS] = {
-    {0xBE, &Read_BEh, false, false},
-    {0xA8, &Read_A8h, false, true},
-    {0x28, &Read_28h, false, true},
-    {0xD4, &Read_D4h, false, true},
-    {0xD5, &Read_D5h, false, true},
-    {0xD8, &Read_D8h, false, true}
-};
+    {0xBE, &Read_BEh, false, false}, {0xA8, &Read_A8h, false, true},
+    {0x28, &Read_28h, false, true},  {0xD4, &Read_D4h, false, true},
+    {0xD5, &Read_D5h, false, true},  {0xD8, &Read_D8h, false, true}};
 
 //--------------------------------------------------------------------------------------------------------
 //------------------------------------------------- CODE -------------------------------------------------
@@ -426,21 +479,26 @@ static CommandResult PlextorFUAFlush(long int TargetSector)
 static CommandResult RequestSense()
 {
     const std::uint8_t AllocationLength = 18;
-    return ExecBytesCommand(AllocationLength, Command::RequestSense(AllocationLength));
+    return ExecBytesCommand(AllocationLength,
+                            Command::RequestSense(AllocationLength));
 }
 
-static CommandResult ModeSense(unsigned char PageCode, unsigned char SubPageCode, int size)
+static CommandResult ModeSense(unsigned char PageCode,
+                               unsigned char SubPageCode, int size)
 {
-    return ExecBytesCommand(size, Command::ModeSense(PageCode, SubPageCode, size));
+    return ExecBytesCommand(size,
+                            Command::ModeSense(PageCode, SubPageCode, size));
 }
 
 // FIXME this is probably broken exactly due to the comment below : when sptd was a global,
 // effects of the previous command's execution remained there.
 // WARNING: this ModeSelect function should always be called just after a ModeSense call
 // because the Mode PArameter List is not rebuilt !
-static CommandResult ModeSelect(unsigned char PageCode, unsigned char SubPageCode, int size)
+static CommandResult ModeSelect(unsigned char PageCode,
+                                unsigned char SubPageCode, int size)
 {
-    return ExecBytesCommand(size, Command::ModeSelect(PageCode, SubPageCode, size));
+    return ExecBytesCommand(size,
+                            Command::ModeSelect(PageCode, SubPageCode, size));
 }
 
 static CommandResult Prefetch(long int TargetSector, unsigned int NbSectors)
@@ -448,7 +506,7 @@ static CommandResult Prefetch(long int TargetSector, unsigned int NbSectors)
     return ExecBytesCommand(18, Command::Prefetch(TargetSector, NbSectors));
 }
 
-static void PrintIDString(unsigned char* dataChars, int dataLength)
+static void PrintIDString(unsigned char *dataChars, int dataLength)
 {
     if (dataChars != NULL)
     {
@@ -461,7 +519,7 @@ static void PrintIDString(unsigned char* dataChars, int dataLength)
             {
                 cc ^= 0x40;
             }
-            printf("%c",cc);
+            printf("%c", cc);
         }
     }
 }
@@ -469,12 +527,13 @@ static void PrintIDString(unsigned char* dataChars, int dataLength)
 static bool PrintDriveInfo(char DriveLetter)
 {
     const std::uint8_t AllocationLength = 36;
-    auto result = ExecBytesCommand(AllocationLength, Command::Inquiry(AllocationLength));
+    auto result =
+        ExecBytesCommand(AllocationLength, Command::Inquiry(AllocationLength));
 
     // print info
-    PrintIDString(&result.Data[8], 8);         // vendor Id
-    PrintIDString(&result.Data[0x10], 0x10);   // product Id
-    PrintIDString(&result.Data[0x20], 4);      // product RevisionLevel
+    PrintIDString(&result.Data[8], 8);       // vendor Id
+    PrintIDString(&result.Data[0x10], 0x10); // product Id
+    PrintIDString(&result.Data[0x20], 4);    // product RevisionLevel
 
     return true; // FIXME we print anyway, and the old code did too, so we always succeed.
 }
@@ -485,33 +544,32 @@ static bool PrintDriveInfo(char DriveLetter)
 //
 static bool ClearCache()
 {
-    int i,j;
+    int i, j;
     bool retval = false;
 
-    for (i=0 ; i<NB_READ_COMMANDS ; i++)
+    for (i = 0; i < NB_READ_COMMANDS; i++)
     {
         if (Commands[i].Supported)
         {
-            for (j=0 ; j<MAX_CACHE_LINES ; j++)
+            for (j = 0; j < MAX_CACHE_LINES; j++)
             {
                 // old code added the original return value from these functions
                 // but then assigned true in the next line anyway, so...
-                Commands[i].pFunc((MAX_CACHE_LINES-j+1)*1000, 1, false);
+                Commands[i].pFunc((MAX_CACHE_LINES - j + 1) * 1000, 1, false);
             }
             retval = true;
             break;
         }
     }
     return retval;
-
 }
 
 static bool SpinDrive(unsigned int Seconds)
 {
     bool retval = false;
-    int i = 0, j=0;
+    int i = 0, j = 0;
 
-    for (i=0 ; i<NB_READ_COMMANDS ; i++)
+    for (i = 0; i < NB_READ_COMMANDS; i++)
     {
         if (Commands[i].Supported)
         {
@@ -524,15 +582,17 @@ static bool SpinDrive(unsigned int Seconds)
     {
         DEBUG("%s", SPINNINGDRIVE);
         auto TimeStart = platform::monotonic_clock();
-        while( platform::monotonic_clock() - TimeStart <= (unsigned long)(Seconds * 1000) )
+        while (platform::monotonic_clock() - TimeStart <=
+               (unsigned long)(Seconds * 1000))
         {
-            Commands[i].pFunc((10000+(j++))%50000, 1, false);
+            Commands[i].pFunc((10000 + (j++)) % 50000, 1, false);
         }
     }
     return retval;
 }
 
-static CommandResult SetDriveSpeed(unsigned char ReadSpeedX, unsigned char WriteSpeedX)
+static CommandResult SetDriveSpeed(unsigned char ReadSpeedX,
+                                   unsigned char WriteSpeedX)
 {
     return ExecBytesCommand(18, Command::SetCDSpeed(ReadSpeedX, WriteSpeedX));
 }
@@ -542,7 +602,9 @@ static void ShowCacheValues(char DriveLetter)
     auto result = ModeSense(CD_DVD_CAPABILITIES_PAGE, 0, 32);
     if (result.Valid)
     {
-        printf("\n[+] Buffer size: %d kB",(result.Data[DESCRIPTOR_BLOCK_1+12]<<8) | result.Data[DESCRIPTOR_BLOCK_1+13]);
+        printf("\n[+] Buffer size: %d kB",
+               (result.Data[DESCRIPTOR_BLOCK_1 + 12] << 8) |
+                   result.Data[DESCRIPTOR_BLOCK_1 + 13]);
     }
     else
     {
@@ -552,7 +614,9 @@ static void ShowCacheValues(char DriveLetter)
     result = ModeSense(CACHING_MODE_PAGE, 0, 18);
     if (result.Valid)
     {
-        printf(", read cache is %s", (result.Data[DESCRIPTOR_BLOCK_1+2] & RCD_BIT) ? "disabled" : "enabled");
+        printf(", read cache is %s",
+               (result.Data[DESCRIPTOR_BLOCK_1 + 2] & RCD_BIT) ? "disabled"
+                                                               : "enabled");
     }
     else
     {
@@ -591,7 +655,7 @@ static bool SetCacheRCDBit(bool RCDBitValue)
         DEBUG("%s", "\ninfo: cannot read Caching Mode page");
         RequestSense();
     }
-    return(retval);
+    return (retval);
 }
 
 //--------------------------------------------------------------------------------------------------------
@@ -607,13 +671,13 @@ static bool SetCacheRCDBit(bool RCDBitValue)
 static void TestSupportedReadCommands(char DriveLetter)
 {
     printf(SUPPORTEDREADCOMMANDS);
-    for (int i=0; i<NB_READ_COMMANDS; i++)
+    for (int i = 0; i < NB_READ_COMMANDS; i++)
     {
         auto &&cmd = Commands[i];
         auto result = cmd.pFunc(10000, 1, false);
         if (result.Valid)
         {
-            printf(" %2Xh",(cmd.FuncByte)&0xFF);
+            printf(" %2Xh", (cmd.FuncByte) & 0xFF);
             cmd.Supported = true;
             if (cmd.FUAbitSupported)
             {
@@ -624,7 +688,8 @@ static void TestSupportedReadCommands(char DriveLetter)
                 }
                 else
                 {
-                    SUPERDEBUG("\ncommand %2Xh with FUA bit rejected",cmd.FuncByte);
+                    SUPERDEBUG("\ncommand %2Xh with FUA bit rejected",
+                               cmd.FuncByte);
                     cmd.FUAbitSupported = false;
                     RequestSense();
                 }
@@ -632,7 +697,7 @@ static void TestSupportedReadCommands(char DriveLetter)
         }
         else
         {
-            SUPERDEBUG("\ncommand %2Xh rejected",cmd.FuncByte);
+            SUPERDEBUG("\ncommand %2Xh rejected", cmd.FuncByte);
             RequestSense();
         }
     }
@@ -648,7 +713,7 @@ static bool TestPlextorFUACommand(int NbIterations)
     printf(TESTINGPLEXFUA);
     auto result = PlextorFUAFlush(100000);
     printf("%s", result.Valid ? ACCEPTED : REJECTED);
-    DEBUG(" (status = %d)",result.ScsiStatus);
+    DEBUG(" (status = %d)", result.ScsiStatus);
     return result.Valid;
 }
 
@@ -656,31 +721,37 @@ static bool TestPlextorFUACommand(int NbIterations)
 // TestPlextorFUACommandWorks
 //
 // test if Plextor's flushing command actually works
-static int TestPlextorFUACommandWorks(int ReadCommand, long int TargetSector, int NbTests)
+static int TestPlextorFUACommandWorks(int ReadCommand, long int TargetSector,
+                                      int NbTests)
 {
     int InvalidationSuccess = 0;
     double InitDelay2 = 0;
 
-    DEBUG("\ninfo: %d test(s), c/nc ratio: %d, burst: %d, max: %d",
-           NbTests, CachedNonCachedSpeedFactor, NbBurstReadSectors, MaxCacheSectors);
+    DEBUG("\ninfo: %d test(s), c/nc ratio: %d, burst: %d, max: %d", NbTests,
+          CachedNonCachedSpeedFactor, NbBurstReadSectors, MaxCacheSectors);
 
-    for (int i=0; i<NbTests; i++)
+    for (int i = 0; i < NbTests; i++)
     {
         // first test : normal cache test
         ClearCache();
-        auto result = Commands[ReadCommand].pFunc(TargetSector, NbBurstReadSectors, false); // init read
+        auto result = Commands[ReadCommand].pFunc(
+            TargetSector, NbBurstReadSectors, false); // init read
         InitDelay = result.Duration;
-        result = Commands[ReadCommand].pFunc(TargetSector + NbBurstReadSectors, NbBurstReadSectors, false);
+        result = Commands[ReadCommand].pFunc(TargetSector + NbBurstReadSectors,
+                                             NbBurstReadSectors, false);
         Delay = result.Duration;
 
         // second test : add a Plextor FUA flush command in between
         ClearCache();
-        result = Commands[ReadCommand].pFunc(TargetSector, NbBurstReadSectors, false); // init read
+        result = Commands[ReadCommand].pFunc(TargetSector, NbBurstReadSectors,
+                                             false); // init read
         InitDelay2 = result.Duration;
         PlextorFUAFlush(TargetSector);
-        result = Commands[ReadCommand].pFunc(TargetSector + NbBurstReadSectors, NbBurstReadSectors, false);
+        result = Commands[ReadCommand].pFunc(TargetSector + NbBurstReadSectors,
+                                             NbBurstReadSectors, false);
         Delay2 = result.Duration;
-        DEBUG("\n %.2f ms / %.2f ms -> %.2f ms / %.2f ms", InitDelay, Delay, InitDelay2, Delay2);
+        DEBUG("\n %.2f ms / %.2f ms -> %.2f ms / %.2f ms", InitDelay, Delay,
+              InitDelay2, Delay2);
 
         // compare times
         if (Delay2 > (CachedNonCachedSpeedFactor * Delay))
@@ -689,7 +760,7 @@ static int TestPlextorFUACommandWorks(int ReadCommand, long int TargetSector, in
         }
     }
     DEBUG("%s", "\nresult: ");
-    return(InvalidationSuccess);
+    return (InvalidationSuccess);
 }
 
 // wrapper for TestPlextorFUACommandWorks
@@ -700,12 +771,15 @@ static int TestPlextorFUACommandWorksWrapper(long int TargetSector, int NbTests)
 
     if (ReadCommandsDetected)
     {
-        for (ValidReadCommand = 0 ; ValidReadCommand < NB_READ_COMMANDS ; ValidReadCommand++)
+        for (ValidReadCommand = 0; ValidReadCommand < NB_READ_COMMANDS;
+             ValidReadCommand++)
         {
             if (Commands[ValidReadCommand].Supported)
             {
-                DEBUG("\ninfo: using command %02Xh",Commands[ValidReadCommand].FuncByte);
-                retval = TestPlextorFUACommandWorks(ValidReadCommand, TargetSector, NbTests);
+                DEBUG("\ninfo: using command %02Xh",
+                      Commands[ValidReadCommand].FuncByte);
+                retval = TestPlextorFUACommandWorks(ValidReadCommand,
+                                                    TargetSector, NbTests);
                 break;
             }
         }
@@ -721,15 +795,17 @@ static int TestPlextorFUACommandWorksWrapper(long int TargetSector, int NbTests)
 //
 // TimeMultipleReads
 //
-static void TimeMultipleReads(unsigned char ReadCommand, long int TargetSector, int NbReads, bool FUAbit)
+static void TimeMultipleReads(unsigned char ReadCommand, long int TargetSector,
+                              int NbReads, bool FUAbit)
 {
     int i = 0;
 
     AverageDelay = 0;
 
-    for (i=0; i<NbReads; i++)
+    for (i = 0; i < NbReads; i++)
     {
-        auto result = Commands[ReadCommand].pFunc(TargetSector, NbBurstReadSectors, FUAbit);
+        auto result = Commands[ReadCommand].pFunc(TargetSector,
+                                                  NbBurstReadSectors, FUAbit);
         Delay = result.Duration;
         AverageDelay = (((AverageDelay * i) + Delay) / (i + 1));
     }
@@ -743,16 +819,17 @@ static void TestCacheSpeedImpact(long int TargetSector, int NbReads)
 {
     int i;
 
-    for (i=0; i<NB_READ_COMMANDS; i++)
+    for (i = 0; i < NB_READ_COMMANDS; i++)
     {
         if ((Commands[i].Supported) && (Commands[i].FUAbitSupported))
         {
-            Commands[i].pFunc(TargetSector, NbBurstReadSectors, false);             // initial load
+            Commands[i].pFunc(TargetSector, NbBurstReadSectors,
+                              false); // initial load
 
             TimeMultipleReads(i, TargetSector, NbReads, false);
-            printf(AVERAGE_NORMAL, (Commands[i].FuncByte)&0xFF, AverageDelay);
+            printf(AVERAGE_NORMAL, (Commands[i].FuncByte) & 0xFF, AverageDelay);
 
-            TimeMultipleReads(i, TargetSector, NbReads, true);     // with FUA
+            TimeMultipleReads(i, TargetSector, NbReads, true); // with FUA
             printf(AVERAGE_FUA, AverageDelay);
 
             i = NB_READ_COMMANDS;
@@ -769,9 +846,9 @@ static int TestRCDBitWorks(int ReadCommand, long int TargetSector, int NbTests)
     int i;
     int InvalidationSuccess = 0;
 
-    DEBUG("\ninfo: %d test(s), c/nc ratio: %d, burst: %d, max: %d",
-           NbTests, CachedNonCachedSpeedFactor, NbBurstReadSectors, MaxCacheSectors);
-    for (i=0; i<NbTests; i++)
+    DEBUG("\ninfo: %d test(s), c/nc ratio: %d, burst: %d, max: %d", NbTests,
+          CachedNonCachedSpeedFactor, NbBurstReadSectors, MaxCacheSectors);
+    for (i = 0; i < NbTests; i++)
     {
         // enable caching
         if (!SetCacheRCDBit(RCD_READ_CACHE_ENABLED))
@@ -782,11 +859,14 @@ static int TestRCDBitWorks(int ReadCommand, long int TargetSector, int NbTests)
 
         // first test : normal cache test
         ClearCache();
-        auto result = Commands[ReadCommand].pFunc(TargetSector, NbBurstReadSectors, false); // init read
+        auto result = Commands[ReadCommand].pFunc(
+            TargetSector, NbBurstReadSectors, false); // init read
         InitDelay = result.Duration;
-        result = Commands[ReadCommand].pFunc(TargetSector + NbBurstReadSectors, NbBurstReadSectors, false);
+        result = Commands[ReadCommand].pFunc(TargetSector + NbBurstReadSectors,
+                                             NbBurstReadSectors, false);
         Delay = result.Duration;
-        DEBUG("\n1) %d : %.2f ms / %d : %.2f ms", TargetSector, InitDelay, TargetSector + NbBurstReadSectors, Delay);
+        DEBUG("\n1) %d : %.2f ms / %d : %.2f ms", TargetSector, InitDelay,
+              TargetSector + NbBurstReadSectors, Delay);
 
         // disable caching
         if (!SetCacheRCDBit(RCD_READ_CACHE_DISABLED))
@@ -797,11 +877,14 @@ static int TestRCDBitWorks(int ReadCommand, long int TargetSector, int NbTests)
 
         // second test : with cache disabled
         ClearCache();
-        result = Commands[ReadCommand].pFunc(TargetSector, NbBurstReadSectors, false); // init read
+        result = Commands[ReadCommand].pFunc(TargetSector, NbBurstReadSectors,
+                                             false); // init read
         InitDelay = result.Duration;
-        Commands[ReadCommand].pFunc(TargetSector + NbBurstReadSectors, NbBurstReadSectors, false);
+        Commands[ReadCommand].pFunc(TargetSector + NbBurstReadSectors,
+                                    NbBurstReadSectors, false);
         Delay2 = result.Duration;
-        DEBUG("\n2) %d : %.2f ms / %d : %.2f ms", TargetSector, InitDelay, TargetSector + NbBurstReadSectors, Delay2);
+        DEBUG("\n2) %d : %.2f ms / %d : %.2f ms", TargetSector, InitDelay,
+              TargetSector + NbBurstReadSectors, Delay2);
 
         // compare times
         if (Delay2 > (CachedNonCachedSpeedFactor * Delay))
@@ -810,7 +893,7 @@ static int TestRCDBitWorks(int ReadCommand, long int TargetSector, int NbTests)
         }
     }
     DEBUG("\nresult: %d/%d\n", InvalidationSuccess, NbTests);
-    return(InvalidationSuccess);
+    return (InvalidationSuccess);
 }
 
 // wrapper for TestRCDBit
@@ -821,12 +904,15 @@ static int TestRCDBitWorksWrapper(long int TargetSector, int NbTests)
 
     if (ReadCommandsDetected)
     {
-        for (ValidReadCommand=0 ; ValidReadCommand<NB_READ_COMMANDS ; ValidReadCommand++)
+        for (ValidReadCommand = 0; ValidReadCommand < NB_READ_COMMANDS;
+             ValidReadCommand++)
         {
             if (Commands[ValidReadCommand].Supported)
             {
-                DEBUG("\ninfo: using command %02Xh",Commands[ValidReadCommand].FuncByte);
-                retval = TestRCDBitWorks(ValidReadCommand, TargetSector, NbTests);
+                DEBUG("\ninfo: using command %02Xh",
+                      Commands[ValidReadCommand].FuncByte);
+                retval =
+                    TestRCDBitWorks(ValidReadCommand, TargetSector, NbTests);
                 break;
             }
         }
@@ -849,32 +935,36 @@ static int TestRCDBitWorksWrapper(long int TargetSector, int NbTests)
 // we will get a multiple of the cache line size and not the cache line size itself.
 //
 //--------------------------------------------------------------------------------------------------------
-static int TestCacheLineSize_Straight(unsigned char ReadCommand, long int TargetSector, int NbMeasures)
+static int TestCacheLineSize_Straight(unsigned char ReadCommand,
+                                      long int TargetSector, int NbMeasures)
 {
     int i, TargetSectorOffset, CacheLineSize;
-    int MaxCacheLineSize= 0;
+    int MaxCacheLineSize = 0;
     double PreviousDelay, InitialDelay;
 
-    DEBUG("\ninfo: %d test(s), c/nc ratio: %d, burst: %d, max: %d",
-           NbMeasures, CachedNonCachedSpeedFactor, NbBurstReadSectors, MaxCacheSectors);
-    for (i=0; i<NbMeasures; i++)
+    DEBUG("\ninfo: %d test(s), c/nc ratio: %d, burst: %d, max: %d", NbMeasures,
+          CachedNonCachedSpeedFactor, NbBurstReadSectors, MaxCacheSectors);
+    for (i = 0; i < NbMeasures; i++)
     {
         ClearCache();
         PreviousDelay = 50;
 
         // initial read. After this the drive's cache should be filled
         // with a number of sectors following this one.
-        auto result = Commands[ReadCommand].pFunc(TargetSector, NbBurstReadSectors, false);
+        auto result = Commands[ReadCommand].pFunc(TargetSector,
+                                                  NbBurstReadSectors, false);
         InitialDelay = result.Duration;
-        SUPERDEBUG("\n init %d: %f",TargetSector, InitialDelay);
+        SUPERDEBUG("\n init %d: %f", TargetSector, InitialDelay);
 
         // read 1 sector at a time and time the reads until one takes more
         // than [CachedNonCachedSpeedFactor] times the delay taken by the previous read
-        for (TargetSectorOffset = 0; TargetSectorOffset < MaxCacheSectors ; TargetSectorOffset += NbBurstReadSectors)
+        for (TargetSectorOffset = 0; TargetSectorOffset < MaxCacheSectors;
+             TargetSectorOffset += NbBurstReadSectors)
         {
-            auto result = Commands[ReadCommand].pFunc(TargetSector + TargetSectorOffset, NbBurstReadSectors, false);
+            auto result = Commands[ReadCommand].pFunc(
+                TargetSector + TargetSectorOffset, NbBurstReadSectors, false);
             Delay = result.Duration;
-            SUPERDEBUG("\n %d: %f",TargetSector + TargetSectorOffset,Delay);
+            SUPERDEBUG("\n %d: %f", TargetSector + TargetSectorOffset, Delay);
 
             if (Delay >= (CachedNonCachedSpeedFactor * PreviousDelay))
             {
@@ -889,8 +979,10 @@ static int TestCacheLineSize_Straight(unsigned char ReadCommand, long int Target
         if (TargetSectorOffset < MaxCacheSectors)
         {
             CacheLineSize = TargetSectorOffset;
-            printf(CACHELINESIZE2,(int)((CacheLineSize*2352)/1024),CacheLineSize);
-            DEBUG(" (%.2f .. %.2f -> %.2f)",InitialDelay,PreviousDelay,Delay);
+            printf(CACHELINESIZE2, (int)((CacheLineSize * 2352) / 1024),
+                   CacheLineSize);
+            DEBUG(" (%.2f .. %.2f -> %.2f)", InitialDelay, PreviousDelay,
+                  Delay);
 
             if ((i > NB_IGNORE_MEASURES) && (CacheLineSize > MaxCacheLineSize))
             {
@@ -901,7 +993,6 @@ static int TestCacheLineSize_Straight(unsigned char ReadCommand, long int Target
         {
             printf("\n test aborted.");
         }
-
     }
     return MaxCacheLineSize;
 }
@@ -922,39 +1013,45 @@ static int TestCacheLineSize_Straight(unsigned char ReadCommand, long int Target
 // the cache size.
 //
 //--------------------------------------------------------------------------------------------------------
-static int TestCacheLineSize_Wrap(unsigned char ReadCommand, long int TargetSector, int NbMeasures)
+static int TestCacheLineSize_Wrap(unsigned char ReadCommand,
+                                  long int TargetSector, int NbMeasures)
 {
     int i, TargetSectorOffset, CacheLineSize;
-    int MaxCacheLineSize= 0;
+    int MaxCacheLineSize = 0;
     double InitialDelay, PreviousInitDelay;
 
-    DEBUG("\ninfo: %d test(s), c/nc ratio: %d, burst: %d, max: %d",
-           NbMeasures, CachedNonCachedSpeedFactor, NbBurstReadSectors, MaxCacheSectors);
-    for (i=0; i<NbMeasures; i++)
+    DEBUG("\ninfo: %d test(s), c/nc ratio: %d, burst: %d, max: %d", NbMeasures,
+          CachedNonCachedSpeedFactor, NbBurstReadSectors, MaxCacheSectors);
+    for (i = 0; i < NbMeasures; i++)
     {
         ClearCache();
 
         // initial read. After this the drive's cache should be filled
         // with a number of sectors following this one.
-        auto result = Commands[ReadCommand].pFunc(TargetSector, NbBurstReadSectors, false);
+        auto result = Commands[ReadCommand].pFunc(TargetSector,
+                                                  NbBurstReadSectors, false);
         InitialDelay = result.Duration;
-        SUPERDEBUG("\n init %d: %f",TargetSector, InitialDelay);
-        result = Commands[ReadCommand].pFunc(TargetSector, NbBurstReadSectors, false);
+        SUPERDEBUG("\n init %d: %f", TargetSector, InitialDelay);
+        result = Commands[ReadCommand].pFunc(TargetSector, NbBurstReadSectors,
+                                             false);
         PreviousInitDelay = result.Duration;
-        SUPERDEBUG("\n %d: %f",TargetSector, PreviousInitDelay);
+        SUPERDEBUG("\n %d: %f", TargetSector, PreviousInitDelay);
 
         // read 1 sector forward and the initial sector. If the original sector takes more
         // than [CachedNonCachedSpeedFactor] times the delay taken by the previous read of,
         // the initial sector, then we reached the limits of the cache
-        for (TargetSectorOffset = 1; TargetSectorOffset < MaxCacheSectors ; TargetSectorOffset += NbBurstReadSectors)
+        for (TargetSectorOffset = 1; TargetSectorOffset < MaxCacheSectors;
+             TargetSectorOffset += NbBurstReadSectors)
         {
-            result = Commands[ReadCommand].pFunc(TargetSector + TargetSectorOffset, NbBurstReadSectors, false);
+            result = Commands[ReadCommand].pFunc(
+                TargetSector + TargetSectorOffset, NbBurstReadSectors, false);
             Delay = result.Duration;
-            SUPERDEBUG("\n %d: %f",TargetSector + TargetSectorOffset,Delay);
+            SUPERDEBUG("\n %d: %f", TargetSector + TargetSectorOffset, Delay);
 
-            result = Commands[ReadCommand].pFunc(TargetSector, NbBurstReadSectors, false);
+            result = Commands[ReadCommand].pFunc(TargetSector,
+                                                 NbBurstReadSectors, false);
             Delay2 = result.Duration;
-            SUPERDEBUG("\n %d: %f",TargetSector,Delay2);
+            SUPERDEBUG("\n %d: %f", TargetSector, Delay2);
 
             if (Delay2 >= (CachedNonCachedSpeedFactor * PreviousInitDelay))
             {
@@ -972,16 +1069,20 @@ static int TestCacheLineSize_Wrap(unsigned char ReadCommand, long int TargetSect
             if (TargetSectorOffset <= 1)
             {
                 CachedNonCachedSpeedFactor++;
-                DEBUG("\ninfo: increasing c/nc ratio to %d", CachedNonCachedSpeedFactor);
+                DEBUG("\ninfo: increasing c/nc ratio to %d",
+                      CachedNonCachedSpeedFactor);
                 i--;
             }
             else
             {
                 CacheLineSize = TargetSectorOffset;
-                printf(CACHELINESIZE2,(int)((CacheLineSize*2352)/1024),CacheLineSize);
-                DEBUG(" (%.2f .. %.2f -> %.2f)",InitialDelay,PreviousInitDelay,Delay2);
+                printf(CACHELINESIZE2, (int)((CacheLineSize * 2352) / 1024),
+                       CacheLineSize);
+                DEBUG(" (%.2f .. %.2f -> %.2f)", InitialDelay,
+                      PreviousInitDelay, Delay2);
 
-                if ((i > NB_IGNORE_MEASURES) && (CacheLineSize > MaxCacheLineSize))
+                if ((i > NB_IGNORE_MEASURES) &&
+                    (CacheLineSize > MaxCacheLineSize))
                 {
                     MaxCacheLineSize = CacheLineSize;
                 }
@@ -1001,9 +1102,11 @@ static int TestCacheLineSize_Wrap(unsigned char ReadCommand, long int TargetSect
 // finds cache line size with a single long burst read of NbMeasures * BurstSize sectors,
 // then try to find the cache size with statistical calculations
 //--------------------------------------------------------------------------------------------------------
-static int TestCacheLineSize_Stat(unsigned char ReadCommand, long int TargetSector, int NbMeasures, int BurstSize)
+static int TestCacheLineSize_Stat(unsigned char ReadCommand,
+                                  long int TargetSector, int NbMeasures,
+                                  int BurstSize)
 {
-    int i,j;
+    int i, j;
     int NbPeakMeasures;
     double Maxdelay = 0.0;
     double Threshold = 0.0;
@@ -1019,9 +1122,9 @@ static int TestCacheLineSize_Stat(unsigned char ReadCommand, long int TargetSect
         PeakMeasuresIndexes[i] = 0;
         if (i < NBDELTA)
         {
-            DeltaArray[i].delta     = 0;
+            DeltaArray[i].delta = 0;
             DeltaArray[i].frequency = 0;
-            DeltaArray[i].divider   = 0;
+            DeltaArray[i].divider = 0;
         }
     }
 
@@ -1031,31 +1134,35 @@ static int TestCacheLineSize_Stat(unsigned char ReadCommand, long int TargetSect
     Measures.push_back(result.Duration);
 
     // fill in measures buffer
-    for (i=1; i<NbMeasures; i++)
+    for (i = 1; i < NbMeasures; i++)
     {
-        result = Commands[ReadCommand].pFunc(TargetSector + i*BurstSize, BurstSize, false);
+        result = Commands[ReadCommand].pFunc(TargetSector + i * BurstSize,
+                                             BurstSize, false);
         Measures.push_back(result.Duration);
     }
 
     // find max time
     Maxdelay = *(std::max_element(std::begin(Measures), std::end(Measures)));
-    DEBUG("\ninitial: %.2f ms, max: %.2f ms",Measures[0], Maxdelay);
+    DEBUG("\ninitial: %.2f ms, max: %.2f ms", Measures[0], Maxdelay);
 
     // find all values above 90% of max
     Threshold = Maxdelay * ThresholdRatioMethod2;
-    for (i=1, NbPeakMeasures=0; (i < NbMeasures) && (NbPeakMeasures < NBPEAKMEASURES); i++)
+    for (i = 1, NbPeakMeasures = 0;
+         (i < NbMeasures) && (NbPeakMeasures < NBPEAKMEASURES); i++)
     {
-        if ( Measures[i] > Threshold) PeakMeasuresIndexes[NbPeakMeasures++] = i;
+        if (Measures[i] > Threshold)
+            PeakMeasuresIndexes[NbPeakMeasures++] = i;
     }
-    DEBUG("\nmeas: %d/%d above %.2f ms (%.2f)",NbPeakMeasures, NbMeasures, Threshold, ThresholdRatioMethod2);
+    DEBUG("\nmeas: %d/%d above %.2f ms (%.2f)", NbPeakMeasures, NbMeasures,
+          Threshold, ThresholdRatioMethod2);
 
     // calculate stats on differences and keep max
-    for (i=1; i<NbPeakMeasures; i++)
+    for (i = 1; i < NbPeakMeasures; i++)
     {
-        CurrentDelta = PeakMeasuresIndexes[i] - PeakMeasuresIndexes[i-1];
+        CurrentDelta = PeakMeasuresIndexes[i] - PeakMeasuresIndexes[i - 1];
         SUPERDEBUG("\ndelta = %d", CurrentDelta);
 
-        for (j=0; j<NbPeakMeasures; j++)
+        for (j = 0; j < NbPeakMeasures; j++)
         {
             // current delta already seen before
             if (DeltaArray[j].delta == CurrentDelta)
@@ -1085,11 +1192,11 @@ static int TestCacheLineSize_Stat(unsigned char ReadCommand, long int TargetSect
     }
 
     // find which sizes are multiples of others
-    for (i=0 ; DeltaArray[i].delta != 0 ; i++)
+    for (i = 0; DeltaArray[i].delta != 0; i++)
     {
-        for (j=0 ; DeltaArray[j].delta != 0 ; j++)
+        for (j = 0; DeltaArray[j].delta != 0; j++)
         {
-            if ((DeltaArray[j].delta % DeltaArray[i].delta == 0) && (i!=j))
+            if ((DeltaArray[j].delta % DeltaArray[i].delta == 0) && (i != j))
             {
                 DeltaArray[i].divider++;
             }
@@ -1097,46 +1204,54 @@ static int TestCacheLineSize_Stat(unsigned char ReadCommand, long int TargetSect
     }
 
     printf("\nsizes: ");
-    for (i=0 ; DeltaArray[i].delta != 0 ; i++)
+    for (i = 0; DeltaArray[i].delta != 0; i++)
     {
-        if (i%5==0) printf("\n");
-        printf(" %d (%d%%, div=%d)",DeltaArray[i].delta,
+        if (i % 5 == 0)
+            printf("\n");
+        printf(" %d (%d%%, div=%d)", DeltaArray[i].delta,
                (int)(100 * DeltaArray[i].frequency / NbPeakMeasures),
                DeltaArray[i].divider);
     }
 
     printf("\nfmax = %d (%d%%) : %d kB, %d sectors",
            DeltaArray[MostFrequentDeltaIndex].frequency,
-           (int)(100 * DeltaArray[MostFrequentDeltaIndex].frequency / NbPeakMeasures),
-           (int)((DeltaArray[MostFrequentDeltaIndex].delta*2352)/1024),
+           (int)(100 * DeltaArray[MostFrequentDeltaIndex].frequency /
+                 NbPeakMeasures),
+           (int)((DeltaArray[MostFrequentDeltaIndex].delta * 2352) / 1024),
            DeltaArray[MostFrequentDeltaIndex].delta);
-    return(MostFrequentDeltaIndex);
+    return (MostFrequentDeltaIndex);
 }
 
 // wrapper for TestCacheLineSize
-static int TestCacheLineSizeWrapper(long int TargetSector, int NbMeasures, int BurstSize, short method)
+static int TestCacheLineSizeWrapper(long int TargetSector, int NbMeasures,
+                                    int BurstSize, short method)
 {
     int ValidReadCommand;
     int retval = -1;
 
     if (ReadCommandsDetected)
     {
-        for (ValidReadCommand=0 ; ValidReadCommand<NB_READ_COMMANDS ; ValidReadCommand++)
+        for (ValidReadCommand = 0; ValidReadCommand < NB_READ_COMMANDS;
+             ValidReadCommand++)
         {
             if (Commands[ValidReadCommand].Supported)
             {
-                DEBUG("\ninfo: using command %02Xh",Commands[ValidReadCommand].FuncByte);
+                DEBUG("\ninfo: using command %02Xh",
+                      Commands[ValidReadCommand].FuncByte);
 
-                switch(method)
+                switch (method)
                 {
                 case 1:
-                    retval = TestCacheLineSize_Wrap(ValidReadCommand, TargetSector, NbMeasures);
+                    retval = TestCacheLineSize_Wrap(ValidReadCommand,
+                                                    TargetSector, NbMeasures);
                     break;
                 case 2:
-                    retval = TestCacheLineSize_Straight(ValidReadCommand, TargetSector, NbMeasures);
+                    retval = TestCacheLineSize_Straight(
+                        ValidReadCommand, TargetSector, NbMeasures);
                     break;
                 case 3:
-                    retval = TestCacheLineSize_Stat(ValidReadCommand, TargetSector, NbMeasures, BurstSize);
+                    retval = TestCacheLineSize_Stat(
+                        ValidReadCommand, TargetSector, NbMeasures, BurstSize);
                     break;
                 default:
                     printf("\nError: invalid method !!\n");
@@ -1162,7 +1277,8 @@ static int TestCacheLineSizeWrapper(long int TargetSector, int NbMeasures, int B
 // will reload the cache and it will be much slower than the one at N+2. To find out the number of cache
 // lines, we read multiple M sectors at various positions
 //--------------------------------------------------------------------------------------------------------
-static int TestCacheLineNumber(unsigned char ReadCommand, long int TargetSector, int NbMeasures)
+static int TestCacheLineNumber(unsigned char ReadCommand, long int TargetSector,
+                               int NbMeasures)
 {
     int i, j;
     int NbCacheLines = 1;
@@ -1175,7 +1291,7 @@ static int TestCacheLineNumber(unsigned char ReadCommand, long int TargetSector,
         printf("\n");
     }
 
-    for (i=0; i<NbMeasures; i++)
+    for (i = 0; i < NbMeasures; i++)
     {
         ClearCache();
         NbCacheLines = 1;
@@ -1184,21 +1300,23 @@ static int TestCacheLineNumber(unsigned char ReadCommand, long int TargetSector,
         // with a number of sectors following this one.
         auto result = Commands[ReadCommand].pFunc(LocalTargetSector, 1, false);
         PreviousDelay = result.Duration;
-        SUPERDEBUG("\n first read at %d: %.2f",LocalTargetSector ,PreviousDelay);
+        SUPERDEBUG("\n first read at %d: %.2f", LocalTargetSector,
+                   PreviousDelay);
 
-        for (j=1; j<MAX_CACHE_LINES; j++)
+        for (j = 1; j < MAX_CACHE_LINES; j++)
         {
             // second read to load another (?) cache line
             Commands[ReadCommand].pFunc(LocalTargetSector + 10000, 1, false);
 
             // read 1 sector next to the original one
-            result = Commands[ReadCommand].pFunc(LocalTargetSector + 2*j, 1, false);
+            result = Commands[ReadCommand].pFunc(LocalTargetSector + 2 * j, 1,
+                                                 false);
             Delay = result.Duration;
-            SUPERDEBUG("\n read at %d: %.2f",LocalTargetSector + 2*j, Delay);
+            SUPERDEBUG("\n read at %d: %.2f", LocalTargetSector + 2 * j, Delay);
 
             if (DebugMode || SuperDebugMode)
             {
-                printf("\n%.2f / %.2f -> ",PreviousDelay, Delay);
+                printf("\n%.2f / %.2f -> ", PreviousDelay, Delay);
             }
             if (Delay <= (PreviousDelay / CachedNonCachedSpeedFactor))
             {
@@ -1223,12 +1341,15 @@ static int TestCacheLineNumberWrapper(long int TargetSector, int NbMeasures)
 
     if (ReadCommandsDetected)
     {
-        for (ValidReadCommand=0 ; ValidReadCommand<NB_READ_COMMANDS ; ValidReadCommand++)
+        for (ValidReadCommand = 0; ValidReadCommand < NB_READ_COMMANDS;
+             ValidReadCommand++)
         {
             if (Commands[ValidReadCommand].Supported)
             {
-                DEBUG("\ninfo: using command %02Xh",Commands[ValidReadCommand].FuncByte);
-                retval = TestCacheLineNumber( ValidReadCommand, TargetSector, NbMeasures);
+                DEBUG("\ninfo: using command %02Xh",
+                      Commands[ValidReadCommand].FuncByte);
+                retval = TestCacheLineNumber(ValidReadCommand, TargetSector,
+                                             NbMeasures);
                 break;
             }
         }
@@ -1246,9 +1367,10 @@ static int TestCacheLineNumberWrapper(long int TargetSector, int NbMeasures)
 //
 // find size of cache invalidated by Plextor FUA command
 //--------------------------------------------------------------------------------------------------------
-static int TestPlextorFUAInvalidationSize(unsigned char ReadCommand, long int TargetSector, int NbMeasures)
+static int TestPlextorFUAInvalidationSize(unsigned char ReadCommand,
+                                          long int TargetSector, int NbMeasures)
 {
-#define CACHE_TEST_BLOCK  20
+#define CACHE_TEST_BLOCK 20
 
     int i, TargetSectorOffset;
     int InvalidatedSize = 0;
@@ -1256,20 +1378,22 @@ static int TestPlextorFUAInvalidationSize(unsigned char ReadCommand, long int Ta
 
     DEBUG("\ninfo: using c/nc ratio : %d", CachedNonCachedSpeedFactor);
 
-    for (i=0; i<NbMeasures; i++)
+    for (i = 0; i < NbMeasures; i++)
     {
-        for (TargetSectorOffset=2000; TargetSectorOffset>=0; TargetSectorOffset -= CACHE_TEST_BLOCK)
+        for (TargetSectorOffset = 2000; TargetSectorOffset >= 0;
+             TargetSectorOffset -= CACHE_TEST_BLOCK)
         {
             ClearCache();
 
             // initial read of 1 sector. After this the drive's cache should be filled
             // with a number of sectors following this one.
-            auto result = Commands[ReadCommand].pFunc( TargetSector, 1, false);
+            auto result = Commands[ReadCommand].pFunc(TargetSector, 1, false);
             InitialDelay = result.Duration;
-            SUPERDEBUG("\n(%d) init = %.2f, thr = %.2f",i, InitialDelay, (double)(InitialDelay / CachedNonCachedSpeedFactor));
+            SUPERDEBUG("\n(%d) init = %.2f, thr = %.2f", i, InitialDelay,
+                       (double)(InitialDelay / CachedNonCachedSpeedFactor));
 
             // invalidate cache with Plextor FUA command
-            PlextorFUAFlush( TargetSector);
+            PlextorFUAFlush(TargetSector);
 
             // now we should get this :
             //
@@ -1278,9 +1402,11 @@ static int TestPlextorFUAInvalidationSize(unsigned char ReadCommand, long int Ta
             //                                        ^
             //                                        |
             // read sectors backwards to find this ---|  spot
-            Commands[ReadCommand].pFunc( TargetSector + TargetSectorOffset, 1, false);
+            Commands[ReadCommand].pFunc(TargetSector + TargetSectorOffset, 1,
+                                        false);
             Delay = result.Duration;
-            SUPERDEBUG(" (%d) %d: %.2f",i, TargetSector + TargetSectorOffset,Delay);
+            SUPERDEBUG(" (%d) %d: %.2f", i, TargetSector + TargetSectorOffset,
+                       Delay);
 
             if (Delay <= (InitialDelay / CachedNonCachedSpeedFactor))
             {
@@ -1293,19 +1419,23 @@ static int TestPlextorFUAInvalidationSize(unsigned char ReadCommand, long int Ta
 }
 
 // wrapper for TestPlextorFUAInvalidationSize
-static int TestPlextorFUAInvalidationSizeWrapper(long int TargetSector, int NbMeasures)
+static int TestPlextorFUAInvalidationSizeWrapper(long int TargetSector,
+                                                 int NbMeasures)
 {
     int ValidReadCommand;
     int retval = -1;
 
     if (ReadCommandsDetected)
     {
-        for (ValidReadCommand=0 ; ValidReadCommand<NB_READ_COMMANDS ; ValidReadCommand++)
+        for (ValidReadCommand = 0; ValidReadCommand < NB_READ_COMMANDS;
+             ValidReadCommand++)
         {
             if (Commands[ValidReadCommand].Supported)
             {
-                DEBUG("\ninfo: using command %02Xh",Commands[ValidReadCommand].FuncByte);
-                retval = TestPlextorFUAInvalidationSize( ValidReadCommand, TargetSector, NbMeasures);
+                DEBUG("\ninfo: using command %02Xh",
+                      Commands[ValidReadCommand].FuncByte);
+                retval = TestPlextorFUAInvalidationSize(
+                    ValidReadCommand, TargetSector, NbMeasures);
                 break;
             }
         }
@@ -1330,7 +1460,7 @@ static bool TestRCDBitSupport(long int TargetSector)
     {
         printf("not supported");
     }
-    return(retval);
+    return (retval);
 }
 
 //--------------------------------------------------------------------------------------------------------
@@ -1355,7 +1485,8 @@ static int TestCacheLineSizePrefetch(long int TargetSector)
     }
     if ((result.ScsiStatus == SCSISTAT_GOOD) && (NbSectors > 1))
     {
-        printf("\n-> cache size = %d kB, %d sectors",(int)((NbSectors - 1)*2352/1024), NbSectors - 1);
+        printf("\n-> cache size = %d kB, %d sectors",
+               (int)((NbSectors - 1) * 2352 / 1024), NbSectors - 1);
     }
     else
     {
@@ -1383,20 +1514,22 @@ static void PrintUsage()
     printf("\nUsage:   cachex <commands> <options> <drive letter>\n");
     printf("\nCommands:  -i     : show drive info\n");
     printf("           -c     : test drive cache\n");
-//    printf("           -c2    : test drive cache (method 2)\n");
-//    printf("           -c3    : test drive cache (method 3)\n");
+    //    printf("           -c2    : test drive cache (method 2)\n");
+    //    printf("           -c3    : test drive cache (method 3)\n");
     printf("           -p     : test plextor FUA command\n");
     printf("           -k     : test cache disabling\n");
     printf("           -w     : test cache line numbers\n");
     printf("\nOptions:   -d     : show debug info\n");
-    printf("           -l xx  : spin drive for xx seconds before starting to measure\n");
-//    printf("           -b xx  : use burst reads of size xx\n");
-//    printf("           -t xx  : threshold at xx%% for cache tests\n");
+    printf("           -l xx  : spin drive for xx seconds before starting to "
+           "measure\n");
+    //    printf("           -b xx  : use burst reads of size xx\n");
+    //    printf("           -t xx  : threshold at xx%% for cache tests\n");
     printf("           -x xx  : use cached/non cached ratio xx\n");
-    printf("           -r xx  : use read command xx (one of 0xbe, 0x28, 0xd5, 0xd4, 0xd8)\n");
+    printf("           -r xx  : use read command xx (one of 0xbe, 0x28, 0xd5, "
+           "0xd4, 0xd8)\n");
     printf("           -s xx  : set read speed to xx (0=max)\n");
     printf("           -m xx  : look for cache size up to xx sectors\n");
-//    printf("           -y xx  : use xx sectors for cache test method 2\n");
+    //    printf("           -y xx  : use xx sectors for cache test method 2\n");
     printf("           -n xx  : perform xx tests\n");
 }
 
@@ -1432,15 +1565,15 @@ int main(int argc, char **argv)
     if (argc < 2)
     {
         PrintUsage();
-        return(-1);
+        return (-1);
     }
-    for(i=1; i<argc; i++)
+    for (i = 1; i < argc; i++)
     {
-        if(argv[i][0] == '-')
+        if (argv[i][0] == '-')
         {
-            switch(argv[i][1])
+            switch (argv[i][1])
             {
-            case 'c' :
+            case 'c':
                 if (argv[i][2] == '2')
                 {
                     CacheMethod2 = true;
@@ -1455,71 +1588,72 @@ int main(int argc, char **argv)
                 }
                 else
                 {
-                    CacheMethod1 = true;    // default method
+                    CacheMethod1 = true; // default method
                 }
                 break;
-            case 'p' :
+            case 'p':
                 TestPlextorFUA = true;
                 break;
-            case 'k' :
+            case 'k':
                 TestRCDBit = true;
                 break;
-            case 'i' :
+            case 'i':
                 ShowDriveInfos = true;
                 break;
-            case 'd' :
+            case 'd':
                 DebugMode = true;
                 break;
-            case 'l' :
+            case 'l':
                 NbSecsDriveSpin = atoi(argv[++i]);
                 SpinDriveFlag = true;
                 break;
-            case 'b' :
+            case 'b':
                 NbBurstReadSectors = atoi(argv[++i]);
                 break;
-            case 'r' :
+            case 'r':
                 i++;
-                sscanf(argv[i],"0x%x",&UserReadCommand);
+                sscanf(argv[i], "0x%x", &UserReadCommand);
                 break;
-            case 's' :
+            case 's':
                 SetMaxDriveSpeed = true;
                 MaxReadSpeed = atoi(argv[++i]);
                 break;
-            case 'w' :
+            case 'w':
                 CacheNbTest = true;
                 break;
-            case 'm' :
+            case 'm':
                 MaxCacheSectors = atoi(argv[++i]);
                 break;
             case 'y':
                 NbSectorsMethod2 = atoi(argv[++i]);
                 break;
-            case 't' :
+            case 't':
                 v = atoi(argv[++i]);
-                ThresholdRatioMethod2 = (double)(v/100.0);
+                ThresholdRatioMethod2 = (double)(v / 100.0);
                 break;
-            case 'x' :
+            case 'x':
                 CachedNonCachedSpeedFactor = atoi(argv[++i]);
                 break;
-            case 'n' :
+            case 'n':
                 Nbtests = atoi(argv[++i]);
                 break;
 
                 // non documented options
-            case '/' :
+            case '/':
                 PFUAInvalidationSizeTest = true;
                 break;
             case '.':
                 SuperDebugMode = true;
                 break;
-            default :
+            default:
                 PrintUsage();
-                return(-1);
+                return (-1);
             }
         }
-        else  // must be drive letter then
+        else // must be drive letter then
         {
-            if (((argv[i][0]>0x41) && (argv[i][0]<0x5A)) || ((argv[i][0]>0x61) && (argv[i][0]<0x7A)))
+            if (((argv[i][0] > 0x41) && (argv[i][0] < 0x5A)) ||
+                ((argv[i][0] > 0x61) && (argv[i][0] < 0x7A)))
             {
                 DriveLetter = argv[i][0];
             }
@@ -1546,13 +1680,14 @@ int main(int argc, char **argv)
     hVolume = platform::open_volume(DriveLetter);
     if (!platform::handle_is_valid(hVolume))
     {
-        return(-1);
+        return (-1);
     }
-    printf("\nDrive on %c is ",(DriveLetter>0x60)?DriveLetter-0x20:DriveLetter);
+    printf("\nDrive on %c is ",
+           (DriveLetter > 0x60) ? DriveLetter - 0x20 : DriveLetter);
     if (!PrintDriveInfo(DriveLetter))
     {
         printf("\nError: cannot read drive info");
-        return(-1);
+        return (-1);
     }
     printf("\n");
 
@@ -1570,16 +1705,17 @@ int main(int argc, char **argv)
     if (UserReadCommand != 0)
     {
         ReadCommandsDetected = false;
-        for (j=0; j<NB_READ_COMMANDS; j++)
+        for (j = 0; j < NB_READ_COMMANDS; j++)
         {
-            Commands[j].Supported = false; // override commands detection by user selection
+            Commands[j].Supported =
+                false; // override commands detection by user selection
         }
 
-        for (j=0; j<NB_READ_COMMANDS; j++)
+        for (j = 0; j < NB_READ_COMMANDS; j++)
         {
             if (UserReadCommand == Commands[j].FuncByte)
             {
-                auto result = Commands[j].pFunc( 10000, 1, false);
+                auto result = Commands[j].pFunc(10000, 1, false);
                 if (result.Valid)
                 {
                     Commands[j].Supported = true;
@@ -1588,18 +1724,19 @@ int main(int argc, char **argv)
                 }
                 else
                 {
-                    printf("\nError: command %02Xh not supported\n",UserReadCommand&0xFF);
+                    printf("\nError: command %02Xh not supported\n",
+                           UserReadCommand & 0xFF);
                     exit(-1);
                 }
             }
         }
         if (j == NB_READ_COMMANDS)
         {
-            printf("\nError: command %02Xh is not recognized\n",UserReadCommand&0xFF);
+            printf("\nError: command %02Xh is not recognized\n",
+                   UserReadCommand & 0xFF);
             exit(-1);
         }
     }
-
 
     //
     // 1) Set drive speed
@@ -1615,9 +1752,9 @@ int main(int argc, char **argv)
             }
             else
             {
-                printf("%dx\n",MaxReadSpeed);
+                printf("%dx\n", MaxReadSpeed);
             }
-            SetDriveSpeed( MaxReadSpeed,0);
+            SetDriveSpeed(MaxReadSpeed, 0);
         }
     }
 
@@ -1630,19 +1767,21 @@ int main(int argc, char **argv)
         platform::set_critical_priority();
         if (SpinDriveFlag)
         {
-            SpinDrive( NbSecsDriveSpin);
+            SpinDrive(NbSecsDriveSpin);
         }
 
-        if (TestPlextorFUACommand( 1))
+        if (TestPlextorFUACommand(1))
         {
             printf("\n[+] Plextor flush tests: ");
-            printf("%d/%d",TestPlextorFUACommandWorksWrapper( 15000, Nbtests),Nbtests);
+            printf("%d/%d", TestPlextorFUACommandWorksWrapper(15000, Nbtests),
+                   Nbtests);
 
             if (PFUAInvalidationSizeTest)
             {
                 // 4) Find the size of data invalidated  by Plextor FUA command
                 printf(TESTINGPLEXFUA2);
-                InvalidatedSectors = TestPlextorFUAInvalidationSizeWrapper( 15000, 1);
+                InvalidatedSectors =
+                    TestPlextorFUAInvalidationSizeWrapper(15000, 1);
                 DEBUG("%s", "\nresult: ");
                 if (InvalidatedSectors > 0)
                 {
@@ -1666,12 +1805,12 @@ int main(int argc, char **argv)
         platform::set_critical_priority();
         if (SpinDriveFlag)
         {
-            SpinDrive( NbSecsDriveSpin);
+            SpinDrive(NbSecsDriveSpin);
         }
 
         // SIZE : method 1
         printf(CACHELINESIZETEST2);
-        CacheLineSizeSectors = TestCacheLineSizeWrapper( 15000, Nbtests, 0, 1);
+        CacheLineSizeSectors = TestCacheLineSizeWrapper(15000, Nbtests, 0, 1);
 
         platform::set_normal_priority();
     }
@@ -1682,12 +1821,12 @@ int main(int argc, char **argv)
         platform::set_critical_priority();
         if (SpinDriveFlag)
         {
-            SpinDrive( NbSecsDriveSpin);
+            SpinDrive(NbSecsDriveSpin);
         }
 
         // SIZE : method 2
-        printf(CACHELINESIZETEST,2);
-        CacheLineSizeSectors = TestCacheLineSizeWrapper( 15000, Nbtests, 0, 2);
+        printf(CACHELINESIZETEST, 2);
+        CacheLineSizeSectors = TestCacheLineSizeWrapper(15000, Nbtests, 0, 2);
 
         platform::set_normal_priority();
     }
@@ -1698,12 +1837,12 @@ int main(int argc, char **argv)
         platform::set_critical_priority();
         if (SpinDriveFlag)
         {
-            SpinDrive( NbSecsDriveSpin);
+            SpinDrive(NbSecsDriveSpin);
         }
 
         // NUMBER
         printf(CACHELINENBTEST);
-        CacheLineNumbers = TestCacheLineNumberWrapper( 15000, Nbtests);
+        CacheLineNumbers = TestCacheLineNumberWrapper(15000, Nbtests);
         platform::set_normal_priority();
     }
 
@@ -1712,20 +1851,21 @@ int main(int argc, char **argv)
         platform::set_critical_priority();
         if (SpinDriveFlag)
         {
-            SpinDrive( NbSecsDriveSpin);
+            SpinDrive(NbSecsDriveSpin);
         }
 
         // SIZE : method 3 (STATS)
-        printf(CACHELINESIZETEST,3);
-        MaxIndex = TestCacheLineSizeWrapper( 15000, NbSectorsMethod2, NbBurstReadSectors, 3);
+        printf(CACHELINESIZETEST, 3);
+        MaxIndex = TestCacheLineSizeWrapper(15000, NbSectorsMethod2,
+                                            NbBurstReadSectors, 3);
         platform::set_normal_priority();
     }
 
     if (CacheMethod4)
     {
         // SIZE : method 4 (PREFETCH)
-        printf(CACHELINESIZETEST,4);
-        TestCacheLineSizePrefetch( 10000);
+        printf(CACHELINESIZETEST, 4);
+        TestCacheLineSizePrefetch(10000);
     }
 
     if (TestRCDBit)
@@ -1733,9 +1873,9 @@ int main(int argc, char **argv)
         printf("\n[+] Testing cache disabling: ");
 
         Nbtests = (Nbtests == 0) ? 3 : Nbtests;
-        if (TestRCDBitSupport( 10000))
+        if (TestRCDBitSupport(10000))
         {
-            if (TestRCDBitWorksWrapper( 15000, Nbtests) > 0)
+            if (TestRCDBitWorksWrapper(15000, Nbtests) > 0)
             {
                 printf("ok");
             }
