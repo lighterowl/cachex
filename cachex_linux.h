@@ -57,7 +57,7 @@ sg_io_hdr_t sg_io_for_write(const std::vector<std::uint8_t> &data,
   auto io = sg_io_common(cdb);
   io.dxfer_direction = SG_DXFER_TO_DEV;
   io.dxfer_len = static_cast<unsigned int>(data.size());
-  io.dxferp = const_cast<std::uint8_t*>(data.data());
+  io.dxferp = const_cast<std::uint8_t *>(data.data());
   return io;
 }
 } // namespace linux_detail
@@ -67,7 +67,7 @@ struct platform_linux
   typedef int device_handle;
   static device_handle open_volume(const char *path)
   {
-    return ::open(path, O_RDWR | O_NONBLOCK | O_DIRECT);
+    return ::open(path, O_RDWR | O_NONBLOCK | O_EXCL);
   }
   static bool handle_is_valid(device_handle fd) { return fd != -1; }
   static void close_handle(device_handle fd) { ::close(fd); }
