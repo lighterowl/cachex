@@ -138,7 +138,6 @@ struct platform
 static int NbBurstReadSectors = 1;
 static double Delay = 0, Delay2 = 0, InitDelay = 0;
 static double AverageDelay = 0;
-static int NbMeasures = 0;
 static bool ReadCommandsDetected = false;
 static unsigned int UserReadCommand = 0;
 static platform::device_handle hVolume;
@@ -432,7 +431,7 @@ static CommandResult Read_28h(long int TargetSector, int NbSectors, bool FUAbit)
         NbSectors, Command::Read_28h(TargetSector, NbSectors, FUAbit));
 }
 
-static CommandResult Read_BEh(long int TargetSector, int NbSectors, bool FUAbit)
+static CommandResult Read_BEh(long int TargetSector, int NbSectors, bool)
 {
     return ExecSectorCommand(NbSectors,
                              Command::Read_BEh(TargetSector, NbSectors));
@@ -459,7 +458,6 @@ static CommandResult Read_D8h(long int TargetSector, int NbSectors, bool FUAbit)
 // drive characteristics
 static int CacheLineSizeSectors = 0;
 static int CacheLineNumbers = 0;
-static int NbCacheLines = 0;
 
 typedef struct
 {
@@ -515,12 +513,12 @@ static CommandResult Prefetch(long int TargetSector, unsigned int NbSectors)
 
 static void PrintIDString(unsigned char *dataChars, int dataLength)
 {
-    if (dataChars != NULL)
+    if (dataChars)
     {
         printf(" ");
         while (0 < dataLength--)
         {
-            char cc = *dataChars++;
+            auto cc = *dataChars++;
             cc &= 0x7F;
             if (!((0x20 <= cc) && (cc <= 0x7E)))
             {
@@ -531,7 +529,7 @@ static void PrintIDString(unsigned char *dataChars, int dataLength)
     }
 }
 
-static bool PrintDriveInfo(char DriveLetter)
+static bool PrintDriveInfo()
 {
     const std::uint8_t AllocationLength = 36;
     auto result =
@@ -589,8 +587,7 @@ static bool SpinDrive(unsigned int Seconds)
     {
         DEBUG("%s", SPINNINGDRIVE);
         auto TimeStart = platform::monotonic_clock();
-        while (platform::monotonic_clock() - TimeStart <=
-               (unsigned long)(Seconds * 1000))
+        while (platform::monotonic_clock() - TimeStart <= (Seconds * 1000))
         {
             Commands[i].pFunc((10000 + (j++)) % 50000, 1, false);
         }
@@ -604,7 +601,7 @@ static CommandResult SetDriveSpeed(unsigned char ReadSpeedX,
     return ExecBytesCommand(18, Command::SetCDSpeed(ReadSpeedX, WriteSpeedX));
 }
 
-static void ShowCacheValues(char DriveLetter)
+static void ShowCacheValues()
 {
     auto result = ModeSense(CD_DVD_CAPABILITIES_PAGE, 0, 32);
     if (result.Valid)
@@ -675,7 +672,7 @@ static bool SetCacheRCDBit(bool RCDBitValue)
 // test and display which read commands are supported by the current drive
 // and if any of these commands supports the FUA bit
 //--------------------------------------------------------------------------------------------------------
-static void TestSupportedReadCommands(char DriveLetter)
+static void TestSupportedReadCommands()
 {
     printf(SUPPORTEDREADCOMMANDS);
     for (int i = 0; i < NB_READ_COMMANDS; i++)
@@ -715,7 +712,7 @@ static void TestSupportedReadCommands(char DriveLetter)
 // TestPlextorFUACommand
 //
 // test if Plextor's flushing command is supported
-static bool TestPlextorFUACommand(int NbIterations)
+static bool TestPlextorFUACommand()
 {
     printf(TESTINGPLEXFUA);
     auto result = PlextorFUAFlush(100000);
@@ -1455,7 +1452,7 @@ static int TestPlextorFUAInvalidationSizeWrapper(long int TargetSector,
     return retval;
 }
 
-static bool TestRCDBitSupport(long int TargetSector)
+static bool TestRCDBitSupport()
 {
     bool retval = false;
     auto result = ModeSense(CACHING_MODE_PAGE, 0, 18);
@@ -1547,12 +1544,11 @@ int main(int argc, char **argv)
 {
     char DriveLetter = 'a';
     int MaxIndex, i, j, v;
-    int MaxReadSpeed;
+    int MaxReadSpeed = 0;
     bool SpinDriveFlag = false;
     bool ShowDriveInfos = false;
     bool TestPlextorFUA = false;
     bool SetMaxDriveSpeed = false;
-    bool TestDriveCache = false;
     bool CacheMethod1 = false;
     bool CacheMethod2 = false;
     bool CacheMethod3 = false;
@@ -1636,7 +1632,7 @@ int main(int argc, char **argv)
                 break;
             case 't':
                 v = atoi(argv[++i]);
-                ThresholdRatioMethod2 = (double)(v / 100.0);
+                ThresholdRatioMethod2 = v / 100.0;
                 break;
             case 'x':
                 CachedNonCachedSpeedFactor = atoi(argv[++i]);
@@ -1691,7 +1687,7 @@ int main(int argc, char **argv)
     }
     printf("\nDrive on %c is ",
            (DriveLetter > 0x60) ? DriveLetter - 0x20 : DriveLetter);
-    if (!PrintDriveInfo(DriveLetter))
+    if (!PrintDriveInfo())
     {
         printf("\nError: cannot read drive info");
         return (-1);
@@ -1705,8 +1701,8 @@ int main(int argc, char **argv)
     //
     if (ShowDriveInfos)
     {
-        ShowCacheValues(DriveLetter);
-        TestSupportedReadCommands(DriveLetter);
+        ShowCacheValues();
+        TestSupportedReadCommands();
     }
 
     if (UserReadCommand != 0)
@@ -1777,7 +1773,7 @@ int main(int argc, char **argv)
             SpinDrive(NbSecsDriveSpin);
         }
 
-        if (TestPlextorFUACommand(1))
+        if (TestPlextorFUACommand())
         {
             printf("\n[+] Plextor flush tests: ");
             printf("%d/%d", TestPlextorFUACommandWorksWrapper(15000, Nbtests),
@@ -1880,7 +1876,7 @@ int main(int argc, char **argv)
         printf("\n[+] Testing cache disabling: ");
 
         Nbtests = (Nbtests == 0) ? 3 : Nbtests;
-        if (TestRCDBitSupport(10000))
+        if (TestRCDBitSupport())
         {
             if (TestRCDBitWorksWrapper(15000, Nbtests) > 0)
             {
