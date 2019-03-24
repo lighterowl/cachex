@@ -1,6 +1,6 @@
-/***********************************************************************************************
+/*******************************************************************************
   CacheExplorer 0.9   spath@cdfreaks.com  2006/xx
- ***********************************************************************************************/
+ ******************************************************************************/
 #include <cstdint>
 #include <cstdio>
 
@@ -58,9 +58,7 @@ struct platform
 
 //#define RELEASE_VERSION
 #undef RELEASE_VERSION
-//--------------------------------------------------------------------------------------------------------
-//------------------------------------------ CONSTANTS ---------------------------------------------------
-//--------------------------------------------------------------------------------------------------------
+
 #define NBPEAKMEASURES 100
 #define NBDELTA 50
 #define MAX_CACHE_LINES 10
@@ -77,9 +75,6 @@ struct platform
 #define RCD_READ_CACHE_ENABLED 0
 #define RCD_READ_CACHE_DISABLED 1
 
-//--------------------------------------------------------------------------------------------------------
-//------------------------------------------- DEBUG ----------------------------------------------------
-//--------------------------------------------------------------------------------------------------------
 #define DEBUG(fmt, ...)                                                        \
     if (DebugMode)                                                             \
         printf(fmt, __VA_ARGS__);
@@ -87,9 +82,7 @@ struct platform
 #define SUPERDEBUG(fmt, ...)                                                   \
     if (SuperDebugMode)                                                        \
         printf(fmt, __VA_ARGS__);
-//--------------------------------------------------------------------------------------------------------
-//------------------------------------------- STRINGS ----------------------------------------------------
-//--------------------------------------------------------------------------------------------------------
+
 #ifndef RELEASE_VERSION
 #define TESTINGSTRING "\n[+] Testing %Xh... "
 #define SUPPORTEDREADCOMMANDS "\n[+] Supported read commands:"
@@ -267,9 +260,9 @@ std::array<std::uint8_t, 12> Read_D8h(long int TargetSector, int NbSectors,
 
 std::array<std::uint8_t, 12> PlextorFUAFlush(long int TargetSector)
 {
-    // this is just a Read28h with NbSectors = 0 and FUAbit = true. however, the original
-    // code declared the CDB size as 12. whether this was a typo or not remains unknown,
-    // which is why this code replicates the original behaviour.
+    // this is just a Read28h with NbSectors = 0 and FUAbit = true. however, the
+    // original code declared the CDB size as 12. whether this was a typo or not
+    // remains unknown, which is why this code replicates the original behaviour
     std::array<std::uint8_t, 12> rv = {
         0x28, // READ(10) command
         0x08, // FUA
@@ -321,10 +314,12 @@ std::array<std::uint8_t, 10> ModeSense(unsigned char PageCode,
 std::array<std::uint8_t, 10> ModeSelect(unsigned char PageCode,
                                         unsigned char SubPageCode, int size)
 {
-    // SPC-4 declares bytes 2 to 6 of MODE SELECT as reserved - they should thus be set to zero. this replicates the behaviour of the original code,
-    // which puts the page and subpage codes there. this might've been just a copypasta error, though, since
-    // the assignment of the operation code contained a "MODE SENSE(10)".
-    std::array<std::uint8_t, 10> rv = {0x55, // MODE SENSE(10)
+    // SPC-4 declares bytes 2 to 6 of MODE SELECT as reserved - they should thus
+    // be set to zero. this replicates the behaviour of the original code, which
+    // puts the page and subpage codes there. this might've been just a
+    // copypasta error, though, since the assignment of the operation code
+    // contained a "MODE SENSE(10)".
+    std::array<std::uint8_t, 10> rv = {0x55,
                                        0,
                                        PageCode,
                                        SubPageCode,
@@ -415,10 +410,6 @@ ExecBytesCommand(unsigned int NbBytes,
     return rv;
 }
 
-//--------------------------------------------------------------------------------------------------------
-//-------------------------------------- Read functions --------------------------------------------------
-//--------------------------------------------------------------------------------------------------------
-
 static CommandResult Read_A8h(long int TargetSector, int NbSectors, bool FUAbit)
 {
     return ExecSectorCommand(
@@ -472,10 +463,6 @@ static sReadCommand Commands[NB_READ_COMMANDS] = {
     {0x28, &Read_28h, false, true},  {0xD4, &Read_D4h, false, true},
     {0xD5, &Read_D5h, false, true},  {0xD8, &Read_D8h, false, true}};
 
-//--------------------------------------------------------------------------------------------------------
-//------------------------------------------------- CODE -------------------------------------------------
-//--------------------------------------------------------------------------------------------------------
-
 static CommandResult PlextorFUAFlush(long int TargetSector)
 {
     return ExecSectorCommand(0, Command::PlextorFUAFlush(TargetSector));
@@ -495,10 +482,10 @@ static CommandResult ModeSense(unsigned char PageCode,
                             Command::ModeSense(PageCode, SubPageCode, size));
 }
 
-// FIXME this is probably broken exactly due to the comment below : when sptd was a global,
-// effects of the previous command's execution remained there.
-// WARNING: this ModeSelect function should always be called just after a ModeSense call
-// because the Mode PArameter List is not rebuilt !
+// FIXME this is probably broken exactly due to the comment below : when sptd
+// was a global, effects of the previous command's execution remained there.
+// WARNING: this ModeSelect function should always be called just after a
+// ModeSense call because the Mode PArameter List is not rebuilt !
 static CommandResult ModeSelect(unsigned char PageCode,
                                 unsigned char SubPageCode, int size)
 {
@@ -540,7 +527,8 @@ static bool PrintDriveInfo()
     PrintIDString(&result.Data[0x10], 0x10); // product Id
     PrintIDString(&result.Data[0x20], 4);    // product RevisionLevel
 
-    return true; // FIXME we print anyway, and the old code did too, so we always succeed.
+    // FIXME we print anyway, and the old code did too, so we always succeed.
+    return true;
 }
 
 // bool ClearCache()
@@ -662,16 +650,12 @@ static bool SetCacheRCDBit(bool RCDBitValue)
     return (retval);
 }
 
-//--------------------------------------------------------------------------------------------------------
-//-------------------------------------- Test functions --------------------------------------------------
-//--------------------------------------------------------------------------------------------------------
-
-//--------------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 // void TestSupportedReadCommands(char DriveLetter)
 //
 // test and display which read commands are supported by the current drive
 // and if any of these commands supports the FUA bit
-//--------------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 static void TestSupportedReadCommands()
 {
     printf(SUPPORTEDREADCOMMANDS);
@@ -929,16 +913,17 @@ static int TestRCDBitWorksWrapper(long int TargetSector, int NbTests)
     return retval;
 }
 
-//--------------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 // TestCacheLineSize_Straight  (METHOD 1 : STRAIGHT)
 //
-// The initial read should fill in the cache. Thus, following ones should be read much
-// faster until the end of the cache. Therefore, a sudden increase of durations of the
-// read accesses should indicate the size of the cache line. We have to be careful though
-// that the cache cannot be refilled while we try to find the limits of the cache, otherwise
-// we will get a multiple of the cache line size and not the cache line size itself.
+// The initial read should fill in the cache. Thus, following ones should be
+// read much faster until the end of the cache. Therefore, a sudden increase of
+// durations of the read accesses should indicate the size of the cache line. We
+// have to be careful though that the cache cannot be refilled while we try to
+// find the limits of the cache, otherwise we will get a multiple of the cache
+// line size and not the cache line size itself.
 //
-//--------------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 static int TestCacheLineSize_Straight(unsigned char ReadCommand,
                                       long int TargetSector, int NbMeasures)
 {
@@ -961,7 +946,8 @@ static int TestCacheLineSize_Straight(unsigned char ReadCommand,
         SUPERDEBUG("\n init %d: %f", TargetSector, InitialDelay);
 
         // read 1 sector at a time and time the reads until one takes more
-        // than [CachedNonCachedSpeedFactor] times the delay taken by the previous read
+        // than [CachedNonCachedSpeedFactor] times the delay taken by the
+        // previous read
         for (TargetSectorOffset = 0; TargetSectorOffset < MaxCacheSectors;
              TargetSectorOffset += NbBurstReadSectors)
         {
@@ -1001,22 +987,24 @@ static int TestCacheLineSize_Straight(unsigned char ReadCommand,
     return MaxCacheLineSize;
 }
 
-//--------------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 // TestCacheLineSize_Wrap  (METHOD 2 : WRAPAROUND)
 //
-// The initial read should fill in the cache. Thus, following ones should be read much
-// faster until the end of the cache. However, there's the risk that at each read new
-// following sectors are cached in, thus showing an infinitely large cache with method 1.
-// In this case, we detect the cache size by reading again the initial sector : when new
-// sectors are read and cached in, the initial sector must be cached-out, thus reading
-// it will be longer. Should work fine on Plextor drives.
+// The initial read should fill in the cache. Thus, following ones should be
+// read much faster until the end of the cache. However, there's the risk that
+// at each read new following sectors are cached in, thus showing an infinitely
+// large cache with method 1.
+// In this case, we detect the cache size by reading again the initial sector :
+// when new sectors are read and cached in, the initial sector must be
+// cached-out, thus reading it will be longer. Should work fine on Plextor
+// drives.
 //
-// This method allows to avoid the "infinite cache" problem due to background reloading
-// even in case of cache hits. However, cache reloading could be triggered when a given
-// threshold is reached. So we might be measuring the threshold value and not really
-// the cache size.
+// This method allows to avoid the "infinite cache" problem due to background
+// reloading even in case of cache hits. However, cache reloading could be
+// triggered when a given threshold is reached. So we might be measuring the
+// threshold value and not really the cache size.
 //
-//--------------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 static int TestCacheLineSize_Wrap(unsigned char ReadCommand,
                                   long int TargetSector, int NbMeasures)
 {
@@ -1041,9 +1029,10 @@ static int TestCacheLineSize_Wrap(unsigned char ReadCommand,
         PreviousInitDelay = result.Duration;
         SUPERDEBUG("\n %d: %f", TargetSector, PreviousInitDelay);
 
-        // read 1 sector forward and the initial sector. If the original sector takes more
-        // than [CachedNonCachedSpeedFactor] times the delay taken by the previous read of,
-        // the initial sector, then we reached the limits of the cache
+        // read 1 sector forward and the initial sector. If the original sector
+        // takes more than [CachedNonCachedSpeedFactor] times the delay taken by
+        // the previous read of, the initial sector, then we reached the limits
+        // of the cache
         for (TargetSectorOffset = 1; TargetSectorOffset < MaxCacheSectors;
              TargetSectorOffset += NbBurstReadSectors)
         {
@@ -1068,8 +1057,9 @@ static int TestCacheLineSize_Wrap(unsigned char ReadCommand,
         // did we find a timing drop within the expected limits ?
         if (TargetSectorOffset < MaxCacheSectors)
         {
-            // sometimes the first sector can be read so much faster than the next one that
-            // is incredibly fast, avoid this by increasing the ratio
+            // sometimes the first sector can be read so much faster than the
+            // next one that is incredibly fast, avoid this by increasing the
+            // ratio
             if (TargetSectorOffset <= 1)
             {
                 CachedNonCachedSpeedFactor++;
@@ -1100,12 +1090,12 @@ static int TestCacheLineSize_Wrap(unsigned char ReadCommand,
     return MaxCacheLineSize;
 }
 
-//--------------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 // TestCacheLineSize_Stat
 //
-// finds cache line size with a single long burst read of NbMeasures * BurstSize sectors,
-// then try to find the cache size with statistical calculations
-//--------------------------------------------------------------------------------------------------------
+// finds cache line size with a single long burst read of NbMeasures * BurstSize
+// sectors, then try to find the cache size with statistical calculations
+//------------------------------------------------------------------------------
 static int TestCacheLineSize_Stat(unsigned char ReadCommand,
                                   long int TargetSector, int NbMeasures,
                                   int BurstSize)
@@ -1272,15 +1262,17 @@ static int TestCacheLineSizeWrapper(long int TargetSector, int NbMeasures,
     return retval;
 }
 
-//--------------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 // TestCacheLineNumber
 //
-// finds number of cache lines by reading 1 sector at N (loading the cache), then another sector at M>>N,
-// then at N+1 and N+2. If There are multiple cache lines, the read at N+1 should be done from the already
-// loaded cache, so it will be very fast and the same time as the read at N+2. Otherwise, the read at N+1
-// will reload the cache and it will be much slower than the one at N+2. To find out the number of cache
-// lines, we read multiple M sectors at various positions
-//--------------------------------------------------------------------------------------------------------
+// finds number of cache lines by reading 1 sector at N (loading the cache),
+// then another sector at M>>N, then at N+1 and N+2. If there are multiple cache
+// lines, the read at N+1 should be done from the already loaded cache, so it
+// will be very fast and the same time as the read at N+2. Otherwise, the read
+// at N+1 will reload the cache and it will be much slower than the one at N+2.
+// To find out the number of cache lines, we read multiple M sectors at various
+// positions
+//------------------------------------------------------------------------------
 static int TestCacheLineNumber(unsigned char ReadCommand, long int TargetSector,
                                int NbMeasures)
 {
@@ -1366,11 +1358,11 @@ static int TestCacheLineNumberWrapper(long int TargetSector, int NbMeasures)
     return retval;
 }
 
-//--------------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 // TestPlextorFUAInvalidationSize
 //
 // find size of cache invalidated by Plextor FUA command
-//--------------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 static int TestPlextorFUAInvalidationSize(unsigned char ReadCommand,
                                           long int TargetSector, int NbMeasures)
 {
@@ -1389,8 +1381,8 @@ static int TestPlextorFUAInvalidationSize(unsigned char ReadCommand,
         {
             ClearCache();
 
-            // initial read of 1 sector. After this the drive's cache should be filled
-            // with a number of sectors following this one.
+            // initial read of 1 sector. After this the drive's cache should be
+            // filled with a number of sectors following this one.
             auto result = Commands[ReadCommand].pFunc(TargetSector, 1, false);
             InitialDelay = result.Duration;
             SUPERDEBUG("\n(%d) init = %.2f, thr = %.2f", i, InitialDelay,
@@ -1399,13 +1391,16 @@ static int TestPlextorFUAInvalidationSize(unsigned char ReadCommand,
             // invalidate cache with Plextor FUA command
             PlextorFUAFlush(TargetSector);
 
-            // now we should get this :
-            //
-            //  cache :             |-- invalidated --|--- still cached ---|
-            //  reading speeds :    |- slow (flushed)-|--- fast (cached) --|-- slow (not read yet) --|
-            //                                        ^
-            //                                        |
-            // read sectors backwards to find this ---|  spot
+            // clang-format off
+// now we should get this :
+//
+//  cache :             |-- invalidated --|--- still cached ---|
+//  reading speeds :    |- slow (flushed)-|--- fast (cached) --|-- slow (not read yet) --|
+//                                        ^
+//                                        |
+// read sectors backwards to find this ---|  spot
+            // clang-format on
+
             Commands[ReadCommand].pFunc(TargetSector + TargetSectorOffset, 1,
                                         false);
             Delay = result.Duration;
@@ -1467,17 +1462,20 @@ static bool TestRCDBitSupport()
     return (retval);
 }
 
-//--------------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 // TestCacheLineSizePrefetch
 //
-// This method is using only the Prefetch command, which is described as follows in SBC3 :
-// - if the specified logical blocks were successfully transferred to the cache, the device server
-//   shall return CONDITION MET
-// - if the cache does not have sufficient capacity to accept all of the specified logical blocks,
-//   the device server shall transfer to the cache as many of the specified logical blocks that fit.
-//   If these logical blocks are transferred successfully it shall return GOOD status
+// This method is using only the Prefetch command, which is described as follows
+// in SBC3 :
+// - if the specified logical blocks were successfully transferred to the cache,
+//   the device server shall return CONDITION MET
+// - if the cache does not have sufficient capacity to accept all of the
+//   specified logical blocks, the device server shall transfer to the cache as
+//   many of the specified logical blocks that fit.
+//   If these logical blocks are transferred successfully it shall return GOOD
+//   status
 //
-//--------------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 static int TestCacheLineSizePrefetch(long int TargetSector)
 {
     int NbSectors = 1;
@@ -1537,9 +1535,6 @@ static void PrintUsage()
     printf("           -n xx  : perform xx tests\n");
 }
 
-//--------------------------------------------------------------------------------------------------------
-//------------------------------------------ MAIN MAIN MAIN MAIN -----------------------------------------
-//--------------------------------------------------------------------------------------------------------
 int main(int argc, char **argv)
 {
     char DriveLetter = 'a';
