@@ -48,6 +48,69 @@ typedef struct _SCSI_PASS_THROUGH_DIRECT
   ULONG SenseInfoOffset;
   UCHAR Cdb[16];
 } SCSI_PASS_THROUGH_DIRECT, *PSCSI_PASS_THROUGH_DIRECT;
+
+void sptd_exec(HANDLE handle, SCSI_PASS_THROUGH_DIRECT &sptd, CommandResult &rv)
+{
+  LARGE_INTEGER PerfCountStart, PerfCountEnd;
+  static const LARGE_INTEGER freq = windows_detail::init_qpc_freq();
+  DWORD dwBytesReturned;
+
+  windows_detail::MP_QueryPerformanceCounter(&PerfCountStart);
+  auto io_ok = DeviceIoControl(handle, IOCTL_SCSI_PASS_THROUGH_DIRECT, &sptd,
+                               sizeof(SCSI_PASS_THROUGH_DIRECT), NULL, 0,
+                               &dwBytesReturned, NULL);
+  windows_detail::MP_QueryPerformanceCounter(&PerfCountEnd);
+
+  rv.Valid = io_ok ? true : false;
+  // FIXME the subtraction should be done on integers and its result divided
+  // by the frequency in order to produce a double, but I'm keeping it
+  // untouched.
+  rv.Duration =
+      ((double)PerfCountEnd.QuadPart - (double)PerfCountStart.QuadPart) /
+      (double)freq.QuadPart;
+  rv.Data.resize(sptd.DataTransferLength);
+  rv.ScsiStatus = sptd.ScsiStatus;
+}
+
+template <std::size_t CDBLength>
+SCSI_PASS_THROUGH_DIRECT
+sptd_common(const std::array<std::uint8_t, CDBLength> &cdb)
+{
+  SCSI_PASS_THROUGH_DIRECT sptd;
+  sptd.Length = sizeof(sptd);
+  sptd.PathId = 0;            // SCSI card ID will be filled in automatically
+  sptd.TargetId = 0;          // SCSI target ID will also be filled in
+  sptd.Lun = 0;               // SCSI lun ID will also be filled in
+  sptd.CdbLength = CDBLength; // CDB size
+  sptd.SenseInfoLength = 0;   // Don't return any sense data
+  sptd.TimeOutValue = 60;     // SCSI timeout value
+  sptd.SenseInfoOffset = 0;
+  std::copy(std::begin(cdb), std::end(cdb), sptd.Cdb);
+  return sptd;
+}
+
+template <std::size_t CDBLength>
+SCSI_PASS_THROUGH_DIRECT
+sptd_for_read(CommandResult &rv, const std::array<std::uint8_t, CDBLength> &cdb)
+{
+  auto sptd = sptd_common(cdb);
+  sptd.DataIn = SCSI_IOCTL_DATA_IN;
+  sptd.DataTransferLength = rv.Data.size();
+  sptd.DataBuffer = rv.Data.data();
+  return sptd;
+}
+
+template <std::size_t CDBLength>
+SCSI_PASS_THROUGH_DIRECT
+sptd_for_write(const std::vector<std::uint8_t> &data,
+               const std::array<std::uint8_t, CDBLength> &cdb)
+{
+  auto sptd = sptd_common(cdb);
+  sptd.DataIn = SCSI_IOCTL_DATA_OUT;
+  sptd.DataTransferLength = static_cast<ULONG>(data.size());
+  sptd.DataBuffer = const_cast<std::uint8_t *>(data.data());
+  return sptd;
+}
 } // namespace windows_detail
 
 struct platform_windows
@@ -56,7 +119,7 @@ struct platform_windows
 
   static std::uint32_t monotonic_clock() { return GetTickCount(); }
 
-  static device_handle open_volume(const char* DrivePath)
+  static device_handle open_volume(const char *DrivePath)
   {
     HANDLE hVolume;
     UINT uDriveType;
@@ -123,39 +186,18 @@ struct platform_windows
                            const std::array<std::uint8_t, CDBLength> &cdb)
   {
     using namespace windows_detail;
-    SCSI_PASS_THROUGH_DIRECT sptd;
-    sptd.Length = sizeof(sptd);
-    sptd.PathId = 0;            // SCSI card ID will be filled in automatically
-    sptd.TargetId = 0;          // SCSI target ID will also be filled in
-    sptd.Lun = 0;               // SCSI lun ID will also be filled in
-    sptd.CdbLength = CDBLength; // CDB size
-    sptd.SenseInfoLength = 0;   // Don't return any sense data
-    sptd.DataIn = SCSI_IOCTL_DATA_IN;         // There will be data from drive
-    sptd.DataTransferLength = rv.Data.size(); // Size of data
-    sptd.TimeOutValue = 60;                   // SCSI timeout value
-    sptd.DataBuffer = rv.Data.data();
-    sptd.SenseInfoOffset = 0;
-    std::copy(std::begin(cdb), std::end(cdb), sptd.Cdb);
+    auto sptd = sptd_for_read(rv, cdb);
+    sptd_exec(handle, sptd, rv);
+  }
 
-    LARGE_INTEGER PerfCountStart, PerfCountEnd;
-    static const LARGE_INTEGER freq = windows_detail::init_qpc_freq();
-    DWORD dwBytesReturned;
-
-    windows_detail::MP_QueryPerformanceCounter(&PerfCountStart);
-    auto io_ok = DeviceIoControl(handle, IOCTL_SCSI_PASS_THROUGH_DIRECT, &sptd,
-                                 sizeof(SCSI_PASS_THROUGH_DIRECT), NULL, 0,
-                                 &dwBytesReturned, NULL);
-    windows_detail::MP_QueryPerformanceCounter(&PerfCountEnd);
-
-    rv.Valid = io_ok ? true : false;
-    // FIXME the subtraction should be done on integers and its result divided
-    // by the frequency in order to produce a double, but I'm keeping it
-    // untouched.
-    rv.Duration =
-        ((double)PerfCountEnd.QuadPart - (double)PerfCountStart.QuadPart) /
-        (double)freq.QuadPart;
-    rv.Data.resize(sptd.DataTransferLength);
-    rv.ScsiStatus = sptd.ScsiStatus;
+  template <std::size_t CDBLength>
+  static void send_data(device_handle handle, CommandResult &rv,
+                        const std::array<std::uint8_t, CDBLength> &cdb,
+                        const std::vector<std::uint8_t> &data)
+  {
+    using namespace windows_detail;
+    auto sptd = sptd_for_write(data, cdb);
+    windows_detail::sptd_exec(handle, sptd, rv);
   }
 };
 

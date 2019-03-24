@@ -8,6 +8,8 @@
 #include "cachex_linux.h"
 #else
 #include "result.h"
+#include <array>
+#include <vector>
 #error "This platform is not supported. Please implement the functions below."
 struct platform
 {
@@ -26,6 +28,13 @@ struct platform
   template <std::size_t CDBLength>
   static void exec_command(device_handle, CommandResult &,
                            const std::array<std::uint8_t, CDBLength> &)
+  {
+  }
+
+  template <std::size_t CDBLength>
+  static void send_data(device_handle, CommandResult &,
+                        const std::array<std::uint8_t, CDBLength> &,
+                        const std::vector<std::uint8_t> &)
   {
   }
 };
@@ -383,6 +392,14 @@ static void ExecCommand(CommandResult &rv,
 }
 
 template <std::size_t CDBLength>
+static void ExecCommand(CommandResult &rv,
+                        const std::array<std::uint8_t, CDBLength> &cdb,
+                        const std::vector<std::uint8_t> &data)
+{
+  platform::send_data(hVolume, rv, cdb, data);
+}
+
+template <std::size_t CDBLength>
 static CommandResult
 ExecSectorCommand(unsigned int NbSectors,
                   const std::array<std::uint8_t, CDBLength> &cdb)
@@ -399,6 +416,17 @@ ExecBytesCommand(unsigned int NbBytes,
 {
   CommandResult rv(NbBytes);
   ExecCommand(rv, cdb);
+  return rv;
+}
+
+template <std::size_t CDBLength>
+static CommandResult
+ExecBytesCommand(unsigned int NbBytes,
+                 const std::array<std::uint8_t, CDBLength> &cdb,
+                 const std::vector<std::uint8_t> &data)
+{
+  CommandResult rv(NbBytes);
+  ExecCommand(rv, cdb, data);
   return rv;
 }
 
@@ -474,15 +502,12 @@ static CommandResult ModeSense(unsigned char PageCode,
                           Command::ModeSense(PageCode, SubPageCode, size));
 }
 
-// FIXME this is probably broken exactly due to the comment below : when sptd
-// was a global, effects of the previous command's execution remained there.
-// WARNING: this ModeSelect function should always be called just after a
-// ModeSense call because the Mode PArameter List is not rebuilt !
 static CommandResult ModeSelect(unsigned char PageCode,
-                                unsigned char SubPageCode, int size)
+                                unsigned char SubPageCode, int size,
+                                const std::vector<std::uint8_t> &data)
 {
-  return ExecBytesCommand(size,
-                          Command::ModeSelect(PageCode, SubPageCode, size));
+  return ExecBytesCommand(
+      size, Command::ModeSelect(PageCode, SubPageCode, size), data);
 }
 
 static CommandResult Prefetch(long int TargetSector, unsigned int NbSectors)
@@ -614,28 +639,30 @@ static bool SetCacheRCDBit(bool RCDBitValue)
 {
   bool retval = false;
 
-  // FIXME
-#if 0
-    if (ModeSense( CACHING_MODE_PAGE, 0, 18))
+  auto result = ModeSense(CACHING_MODE_PAGE, 0, 18);
+  if (result.Valid)
+  {
+    result.Data[DESCRIPTOR_BLOCK_1 + 2] =
+        (result.Data[DESCRIPTOR_BLOCK_1 + 2] & 0xFE) | RCDBitValue;
+    // this used to be 20, wtf?
+    result = ModeSelect(CACHING_MODE_PAGE, 0, 18, result.Data);
+    if (result.Valid)
     {
-        DataBuf[DESCRIPTOR_BLOCK_1+2] = (DataBuf[DESCRIPTOR_BLOCK_1+2] & 0xFE) + RCDBitValue;
-        if (ModeSelect( CACHING_MODE_PAGE, 0, 20))
-        {
-            ModeSense( CACHING_MODE_PAGE, 0, 18);
-            if ((DataBuf[DESCRIPTOR_BLOCK_1+2] & RCD_BIT) == RCDBitValue)
-            {
-                retval = true;
-            }
-        }
-
-        if (!retval)
-        {
-            DEBUG("\ninfo: cannot write Caching Mode page");
-            RequestSense(DriveLetter);
-        }
+      result = ModeSense(CACHING_MODE_PAGE, 0, 18);
+      if (result.Valid &&
+          (result.Data[DESCRIPTOR_BLOCK_1 + 2] & RCD_BIT) == RCDBitValue)
+      {
+        retval = true;
+      }
     }
-    else
-#endif
+
+    if (!retval)
+    {
+      DEBUG("%s", "\ninfo: cannot write Caching Mode page");
+      RequestSense();
+    }
+  }
+  else
   {
     DEBUG("%s", "\ninfo: cannot read Caching Mode page");
     RequestSense();
