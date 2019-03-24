@@ -1,4 +1,3 @@
 BasedOnStyle: LLVM
-IndentWidth: 4
+IndentWidth: 2
 BreakBeforeBraces: Allman
-ReflowComments: false
