@@ -21,14 +21,14 @@
 struct CommandResult
 {
     CommandResult(unsigned int NumOutBytes)
-        : Valid(false), Duration(0.0), ScsiStatus(0xff), Data(NumOutBytes)
+        : Data(NumOutBytes), Duration(0.0), Valid(false), ScsiStatus(0xff)
     {
     }
 
-    bool Valid;
-    double Duration;
-    std::uint8_t ScsiStatus;
     std::vector<std::uint8_t> Data;
+    double Duration;
+    bool Valid;
+    std::uint8_t ScsiStatus;
 };
 
 #ifdef _WIN32
@@ -37,9 +37,9 @@ struct CommandResult
 struct platform
 {
     typedef int device_handle;
-    static device_handle open_volume(char DriveLetter) { return 0; }
-    static bool handle_is_valid(device_handle h) { return false; }
-    static void close_handle(device_handle h) {}
+    static device_handle open_volume(char) { return 0; }
+    static bool handle_is_valid(device_handle) { return false; }
+    static void close_handle(device_handle) {}
     static std::uint32_t monotonic_clock()
     {
         static std::uint32_t val = 0;
@@ -49,8 +49,8 @@ struct platform
     static void set_normal_priority() {}
 
     template <std::size_t CDBLength>
-    static void exec_command(CommandResult &rv,
-                             const std::array<std::uint8_t, CDBLength> &cdb)
+    static void exec_command(CommandResult &,
+                             const std::array<std::uint8_t, CDBLength> &)
     {
     }
 };
@@ -162,18 +162,19 @@ namespace Command
 std::array<std::uint8_t, 12> Read_A8h(long int TargetSector, int NbSectors,
                                       bool FUAbit)
 {
-    std::array<std::uint8_t, 12> rv = {0xA8,
-                                       (FUAbit << 3),
-                                       (TargetSector >> 24) & 0xFF, // msb
-                                       (TargetSector >> 16) & 0xFF,
-                                       (TargetSector >> 8) & 0xFF,
-                                       (TargetSector)&0xFF,      // lsb
-                                       (NbSectors >> 24) & 0xFF, // msb
-                                       (NbSectors >> 16) & 0xFF,
-                                       (NbSectors >> 8) & 0xFF,
-                                       (NbSectors)&0xFF, // lsb
-                                       0,
-                                       0};
+    std::array<std::uint8_t, 12> rv = {
+        0xA8,
+        static_cast<std::uint8_t>(FUAbit << 3),
+        static_cast<std::uint8_t>(TargetSector >> 24),
+        static_cast<std::uint8_t>(TargetSector >> 16),
+        static_cast<std::uint8_t>(TargetSector >> 8),
+        static_cast<std::uint8_t>(TargetSector),
+        static_cast<std::uint8_t>(NbSectors >> 24),
+        static_cast<std::uint8_t>(NbSectors >> 16),
+        static_cast<std::uint8_t>(NbSectors >> 8),
+        static_cast<std::uint8_t>(NbSectors),
+        0,
+        0};
     return rv;
 }
 
@@ -182,14 +183,14 @@ std::array<std::uint8_t, 10> Read_28h(long int TargetSector, int NbSectors,
 {
     std::array<std::uint8_t, 10> rv = {
         0x28,
-        (FUAbit << 3),
-        uint8_t((TargetSector >> 24) & 0xFF), // msb
-        uint8_t((TargetSector >> 16) & 0xFF),
-        uint8_t((TargetSector >> 8) & 0xFF),
-        uint8_t((TargetSector)&0xFF), // lsb
+        static_cast<std::uint8_t>(FUAbit << 3),
+        static_cast<std::uint8_t>(TargetSector >> 24),
+        static_cast<std::uint8_t>(TargetSector >> 16),
+        static_cast<std::uint8_t>(TargetSector >> 8),
+        static_cast<std::uint8_t>(TargetSector),
         0,
-        uint8_t((NbSectors >> 8) & 0xFF), // msb
-        uint8_t((NbSectors)&0xFF),        // lsb
+        static_cast<std::uint8_t>(NbSectors >> 8),
+        static_cast<std::uint8_t>(NbSectors),
         0};
     return rv;
 }
@@ -199,13 +200,13 @@ std::array<std::uint8_t, 12> Read_BEh(long int TargetSector, int NbSectors)
     std::array<std::uint8_t, 12> rv = {
         0xBE,
         0x00, // 0x04 = audio data only, 0x00 = any type
-        uint8_t((TargetSector >> 24) & 0xFF), // address
-        uint8_t((TargetSector >> 16) & 0xFF),
-        uint8_t((TargetSector >> 8) & 0xFF),
-        uint8_t((TargetSector)&0xFF),
-        uint8_t((NbSectors >> 16) & 0xFF), // size
-        uint8_t((NbSectors >> 8) & 0xFF),
-        uint8_t((NbSectors)&0xFF),
+        static_cast<std::uint8_t>(TargetSector >> 24),
+        static_cast<std::uint8_t>(TargetSector >> 16),
+        static_cast<std::uint8_t>(TargetSector >> 8),
+        static_cast<std::uint8_t>(TargetSector),
+        static_cast<std::uint8_t>(NbSectors >> 16),
+        static_cast<std::uint8_t>(NbSectors >> 8),
+        static_cast<std::uint8_t>(NbSectors),
         0x10, // just data
         0,    // no subcode
         0};
@@ -217,14 +218,14 @@ std::array<std::uint8_t, 10> Read_D4h(long int TargetSector, int NbSectors,
 {
     std::array<std::uint8_t, 10> rv = {
         0xD4,
-        (FUAbit << 3),
-        uint8_t((TargetSector >> 24) & 0xFF), // msb
-        uint8_t((TargetSector >> 16) & 0xFF),
-        uint8_t((TargetSector >> 8) & 0xFF),
-        uint8_t((TargetSector)&0xFF), // lsb
-        uint8_t((NbSectors >> 16) & 0xFF),
-        uint8_t((NbSectors >> 8) & 0xFF),
-        uint8_t((NbSectors)&0xFF), // lsb
+        static_cast<std::uint8_t>(FUAbit << 3),
+        static_cast<std::uint8_t>(TargetSector >> 24),
+        static_cast<std::uint8_t>(TargetSector >> 16),
+        static_cast<std::uint8_t>(TargetSector >> 8),
+        static_cast<std::uint8_t>(TargetSector),
+        static_cast<std::uint8_t>(NbSectors >> 16),
+        static_cast<std::uint8_t>(NbSectors >> 8),
+        static_cast<std::uint8_t>(NbSectors),
         0};
     return rv;
 }
@@ -234,14 +235,14 @@ std::array<std::uint8_t, 10> Read_D5h(long int TargetSector, int NbSectors,
 {
     std::array<std::uint8_t, 10> rv = {
         0xD5,
-        (FUAbit << 3),
-        uint8_t((TargetSector >> 24) & 0xFF), // msb
-        uint8_t((TargetSector >> 16) & 0xFF),
-        uint8_t((TargetSector >> 8) & 0xFF),
-        uint8_t((TargetSector)&0xFF), // lsb
-        uint8_t((NbSectors >> 16) & 0xFF),
-        uint8_t((NbSectors >> 8) & 0xFF),
-        uint8_t((NbSectors)&0xFF), // lsb
+        static_cast<std::uint8_t>(FUAbit << 3),
+        static_cast<std::uint8_t>(TargetSector >> 24),
+        static_cast<std::uint8_t>(TargetSector >> 16),
+        static_cast<std::uint8_t>(TargetSector >> 8),
+        static_cast<std::uint8_t>(TargetSector),
+        static_cast<std::uint8_t>(NbSectors >> 16),
+        static_cast<std::uint8_t>(NbSectors >> 8),
+        static_cast<std::uint8_t>(NbSectors),
         0};
     return rv;
 }
@@ -251,15 +252,15 @@ std::array<std::uint8_t, 12> Read_D8h(long int TargetSector, int NbSectors,
 {
     std::array<std::uint8_t, 12> rv = {
         0xD8,
-        (FUAbit << 3),
-        uint8_t((TargetSector >> 24) & 0xFF), // msb
-        uint8_t((TargetSector >> 16) & 0xFF),
-        uint8_t((TargetSector >> 8) & 0xFF),
-        uint8_t((TargetSector)&0xFF),      // lsb
-        uint8_t((NbSectors >> 24) & 0xFF), // msb
-        uint8_t((NbSectors >> 16) & 0xFF),
-        uint8_t((NbSectors >> 8) & 0xFF),
-        uint8_t((NbSectors)&0xFF), // lsb
+        static_cast<std::uint8_t>(FUAbit << 3),
+        static_cast<std::uint8_t>(TargetSector >> 24),
+        static_cast<std::uint8_t>(TargetSector >> 16),
+        static_cast<std::uint8_t>(TargetSector >> 8),
+        static_cast<std::uint8_t>(TargetSector),
+        static_cast<std::uint8_t>(NbSectors >> 24),
+        static_cast<std::uint8_t>(NbSectors >> 16),
+        static_cast<std::uint8_t>(NbSectors >> 8),
+        static_cast<std::uint8_t>(NbSectors),
         0,
         0};
     return rv;
@@ -271,12 +272,12 @@ std::array<std::uint8_t, 12> PlextorFUAFlush(long int TargetSector)
     // code declared the CDB size as 12. whether this was a typo or not remains unknown,
     // which is why this code replicates the original behaviour.
     std::array<std::uint8_t, 12> rv = {
-        0x28,                                 // READ(10) command
-        0x08,                                 // FUA
-        uint8_t((TargetSector >> 24) & 0xFF), // msb
-        uint8_t((TargetSector >> 16) & 0xFF),
-        uint8_t((TargetSector >> 8) & 0xFF),
-        uint8_t((TargetSector)&0xFF), // lsb
+        0x28, // READ(10) command
+        0x08, // FUA
+        static_cast<std::uint8_t>(TargetSector >> 24),
+        static_cast<std::uint8_t>(TargetSector >> 16),
+        static_cast<std::uint8_t>(TargetSector >> 8),
+        static_cast<std::uint8_t>(TargetSector),
         0,
         0,
         0,
@@ -363,15 +364,21 @@ std::array<std::uint8_t, 6> Inquiry(std::uint8_t AllocationLength)
 std::array<std::uint8_t, 12> SetCDSpeed(unsigned char ReadSpeedX,
                                         unsigned char WriteSpeedX)
 {
-    unsigned int ReadSpeedkB = (ReadSpeedX * 176) + 2; // 1x CD = 176kB/s
+    unsigned int ReadSpeedkB = 0xFFFF;
+    if (ReadSpeedX != 0)
+    {
+        // don't ask me what this "+ 2" is doing here, MMC-4 doesn't mention
+        // anything of this sort.
+        ReadSpeedkB = (ReadSpeedX * 176) + 2; // 1x CD = 176kB/s
+    }
     unsigned int WriteSpeedkB = (WriteSpeedX * 176);
     std::array<std::uint8_t, 12> rv = {
         0xBB, // SET CD SPEED
         0,
-        (ReadSpeedX == 0) ? 0xFF : (ReadSpeedkB >> 8) & 0xFF,
-        (ReadSpeedX == 0) ? 0xFF : ReadSpeedkB & 0xFF,
-        (WriteSpeedkB >> 8) & 0xFF,
-        WriteSpeedkB & 0xFF,
+        static_cast<std::uint8_t>(ReadSpeedkB >> 8),
+        static_cast<std::uint8_t>(ReadSpeedkB),
+        static_cast<std::uint8_t>(WriteSpeedkB >> 8),
+        static_cast<std::uint8_t>(WriteSpeedkB),
         0,
         0,
         0,
