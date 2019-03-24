@@ -1,5 +1,6 @@
 /*******************************************************************************
-  CacheExplorer 0.9   spath@cdfreaks.com  2006/xx
+ * CacheExplorer 0.10  dkk089@gmail.com    2019/03, based on :
+ * CacheExplorer 0.9   spath@cdfreaks.com  2006/xx
  ******************************************************************************/
 
 #ifdef _WIN32
@@ -1549,6 +1550,7 @@ int main(int argc, char **argv)
   int Nbtests = 0;
 
   // --------------- setup ---------------------------
+  printf("\nCacheExplorer 0.10 - https://github.com/xavery/cachex, based on\n");
   printf("\nCacheExplorer 0.9 - spath@cdfreaks.com\n");
 
   // ------------ command line parsing --------------
