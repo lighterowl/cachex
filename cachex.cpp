@@ -1,27 +1,14 @@
 /*******************************************************************************
   CacheExplorer 0.9   spath@cdfreaks.com  2006/xx
  ******************************************************************************/
-#include <cstdint>
-#include <cstdio>
-
-#include <algorithm>
-#include <array>
-#include <vector>
-
-#define SCSISTAT_GOOD 0x00
-#define SCSISTAT_CHECK_CONDITION 0x02
-#define SCSISTAT_CONDITION_MET 0x04
-#define SCSISTAT_BUSY 0x08
-#define SCSISTAT_INTERMEDIATE 0x10
-#define SCSISTAT_INTERMEDIATE_COND_MET 0x14
-#define SCSISTAT_RESERVATION_CONFLICT 0x18
-#define SCSISTAT_COMMAND_TERMINATED 0x22
-#define SCSISTAT_QUEUE_FULL 0x28
 
 #ifdef _WIN32
 #include "cachex_win.h"
+#elif defined(__linux__)
+#include "cachex_linux.h"
 #else
 #include "result.h"
+#error "This platform is not supported. Please implement the functions below."
 struct platform
 {
   typedef int device_handle;
@@ -43,6 +30,23 @@ struct platform
   }
 };
 #endif
+
+#include <cstdint>
+#include <cstdio>
+
+#include <algorithm>
+#include <array>
+#include <vector>
+
+#define SCSISTAT_GOOD 0x00
+#define SCSISTAT_CHECK_CONDITION 0x02
+#define SCSISTAT_CONDITION_MET 0x04
+#define SCSISTAT_BUSY 0x08
+#define SCSISTAT_INTERMEDIATE 0x10
+#define SCSISTAT_INTERMEDIATE_COND_MET 0x14
+#define SCSISTAT_RESERVATION_CONFLICT 0x18
+#define SCSISTAT_COMMAND_TERMINATED 0x22
+#define SCSISTAT_QUEUE_FULL 0x28
 
 //#define RELEASE_VERSION
 #undef RELEASE_VERSION
