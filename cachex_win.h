@@ -1,6 +1,9 @@
 #ifndef CACHEX_WIN_H
 #define CACHEX_WIN_H
 
+#include "result.h"
+#include <array>
+
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 

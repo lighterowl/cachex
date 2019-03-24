@@ -18,22 +18,10 @@
 #define SCSISTAT_COMMAND_TERMINATED 0x22
 #define SCSISTAT_QUEUE_FULL 0x28
 
-struct CommandResult
-{
-  CommandResult(unsigned int NumOutBytes)
-      : Data(NumOutBytes), Duration(0.0), Valid(false), ScsiStatus(0xff)
-  {
-  }
-
-  std::vector<std::uint8_t> Data;
-  double Duration;
-  bool Valid;
-  std::uint8_t ScsiStatus;
-};
-
 #ifdef _WIN32
 #include "cachex_win.h"
 #else
+#include "result.h"
 struct platform
 {
   typedef int device_handle;
