@@ -119,7 +119,7 @@ struct platform_windows
   }
 
   template <std::size_t CDBLength>
-  static void exec_command(CommandResult &rv,
+  static void exec_command(device_handle handle, CommandResult &rv,
                            const std::array<std::uint8_t, CDBLength> &cdb)
   {
     using namespace windows_detail;
@@ -142,7 +142,7 @@ struct platform_windows
     DWORD dwBytesReturned;
 
     windows_detail::MP_QueryPerformanceCounter(&PerfCountStart);
-    auto io_ok = DeviceIoControl(hVolume, IOCTL_SCSI_PASS_THROUGH_DIRECT, &sptd,
+    auto io_ok = DeviceIoControl(handle, IOCTL_SCSI_PASS_THROUGH_DIRECT, &sptd,
                                  sizeof(SCSI_PASS_THROUGH_DIRECT), NULL, 0,
                                  &dwBytesReturned, NULL);
     windows_detail::MP_QueryPerformanceCounter(&PerfCountEnd);

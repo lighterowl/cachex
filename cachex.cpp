@@ -25,7 +25,7 @@
 struct platform
 {
   typedef int device_handle;
-  static device_handle open_volume(const char*) { return 0; }
+  static device_handle open_volume(const char *) { return 0; }
   static bool handle_is_valid(device_handle) { return false; }
   static void close_handle(device_handle) {}
   static std::uint32_t monotonic_clock()
@@ -37,7 +37,7 @@ struct platform
   static void set_normal_priority() {}
 
   template <std::size_t CDBLength>
-  static void exec_command(CommandResult &,
+  static void exec_command(device_handle, CommandResult &,
                            const std::array<std::uint8_t, CDBLength> &)
   {
   }
@@ -375,7 +375,7 @@ template <std::size_t CDBLength>
 static void ExecCommand(CommandResult &rv,
                         const std::array<std::uint8_t, CDBLength> &cdb)
 {
-  platform::exec_command(rv, cdb);
+  platform::exec_command(hVolume, rv, cdb);
 }
 
 template <std::size_t CDBLength>
