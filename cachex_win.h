@@ -53,13 +53,14 @@ struct platform_windows
 
   static std::uint32_t monotonic_clock() { return GetTickCount(); }
 
-  static device_handle open_volume(char DriveLetter)
+  static device_handle open_volume(const char* DrivePath)
   {
     HANDLE hVolume;
     UINT uDriveType;
     char szVolumeName[8];
     char szRootName[5];
     DWORD dwAccessFlags;
+    char DriveLetter = DrivePath[0];
 
     szRootName[0] = DriveLetter;
     szRootName[1] = ':';

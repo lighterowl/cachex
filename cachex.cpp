@@ -37,7 +37,7 @@ struct CommandResult
 struct platform
 {
   typedef int device_handle;
-  static device_handle open_volume(char) { return 0; }
+  static device_handle open_volume(const char*) { return 0; }
   static bool handle_is_valid(device_handle) { return false; }
   static void close_handle(device_handle) {}
   static std::uint32_t monotonic_clock()
@@ -1530,7 +1530,7 @@ static void PrintUsage()
 
 int main(int argc, char **argv)
 {
-  char DriveLetter = 'a';
+  const char *DrivePath = nullptr;
   int MaxIndex, i, j, v;
   int MaxReadSpeed = 0;
   bool SpinDriveFlag = false;
@@ -1641,22 +1641,13 @@ int main(int argc, char **argv)
         return (-1);
       }
     }
-    else // must be drive letter then
+    else // must be drive then
     {
-      if (((argv[i][0] > 0x41) && (argv[i][0] < 0x5A)) ||
-          ((argv[i][0] > 0x61) && (argv[i][0] < 0x7A)))
-      {
-        DriveLetter = argv[i][0];
-      }
-      else
-      {
-        printf("\nError: invalid drive letter");
-        exit(-1);
-      }
+      DrivePath = argv[i];
     }
   }
 
-  if (DriveLetter == 'a')
+  if (!DrivePath)
   {
     printf("\nError: no drive selected\n");
     PrintUsage();
@@ -1668,13 +1659,12 @@ int main(int argc, char **argv)
   //
   // print drive info
   //
-  hVolume = platform::open_volume(DriveLetter);
+  hVolume = platform::open_volume(DrivePath);
   if (!platform::handle_is_valid(hVolume))
   {
     return (-1);
   }
-  printf("\nDrive on %c is ",
-         (DriveLetter > 0x60) ? DriveLetter - 0x20 : DriveLetter);
+  printf("\nDrive on %s is ", DrivePath);
   if (!PrintDriveInfo())
   {
     printf("\nError: cannot read drive info");
