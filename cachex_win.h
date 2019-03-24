@@ -15,12 +15,11 @@ static const UCHAR SCSI_IOCTL_DATA_UNSPECIFIED = 2;
 
 static const DWORD IOCTL_SCSI_PASS_THROUGH_DIRECT = 0x4D014;
 
-static LARGE_INTEGER init_qpc_freq()
+static double init_qpc_freq()
 {
   LARGE_INTEGER freq;
   QueryPerformanceFrequency(&freq);
-  freq.QuadPart /= 1000;
-  return freq;
+  return static_cast<double>((freq.QuadPart / 1000));
 }
 
 static void MP_QueryPerformanceCounter(LARGE_INTEGER *lpCounter)
@@ -52,7 +51,7 @@ typedef struct _SCSI_PASS_THROUGH_DIRECT
 void sptd_exec(HANDLE handle, SCSI_PASS_THROUGH_DIRECT &sptd, CommandResult &rv)
 {
   LARGE_INTEGER PerfCountStart, PerfCountEnd;
-  static const LARGE_INTEGER freq = windows_detail::init_qpc_freq();
+  static const double freq = windows_detail::init_qpc_freq();
   DWORD dwBytesReturned;
 
   windows_detail::MP_QueryPerformanceCounter(&PerfCountStart);
@@ -62,12 +61,7 @@ void sptd_exec(HANDLE handle, SCSI_PASS_THROUGH_DIRECT &sptd, CommandResult &rv)
   windows_detail::MP_QueryPerformanceCounter(&PerfCountEnd);
 
   rv.Valid = io_ok ? true : false;
-  // FIXME the subtraction should be done on integers and its result divided
-  // by the frequency in order to produce a double, but I'm keeping it
-  // untouched.
-  rv.Duration =
-      ((double)PerfCountEnd.QuadPart - (double)PerfCountStart.QuadPart) /
-      (double)freq.QuadPart;
+  rv.Duration = (PerfCountEnd.QuadPart - PerfCountStart.QuadPart) / freq;
   rv.Data.resize(sptd.DataTransferLength);
   rv.ScsiStatus = sptd.ScsiStatus;
 }

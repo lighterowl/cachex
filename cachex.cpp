@@ -526,8 +526,6 @@ static bool PrintDriveInfo()
   PrintIDString(&result.Data[8], 8);       // vendor Id
   PrintIDString(&result.Data[0x10], 0x10); // product Id
   PrintIDString(&result.Data[0x20], 4);    // product RevisionLevel
-
-  // FIXME we print anyway, and the old code did too, so we always succeed.
   return true;
 }
 
