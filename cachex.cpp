@@ -312,24 +312,10 @@ std::array<std::uint8_t, 10> ModeSense(unsigned char PageCode,
   return rv;
 }
 
-std::array<std::uint8_t, 10> ModeSelect(unsigned char PageCode,
-                                        unsigned char SubPageCode, int size)
+std::array<std::uint8_t, 10> ModeSelect(std::uint16_t size)
 {
-  // SPC-4 declares bytes 2 to 6 of MODE SELECT as reserved - they should thus
-  // be set to zero. this replicates the behaviour of the original code, which
-  // puts the page and subpage codes there. this might've been just a
-  // copypasta error, though, since the assignment of the operation code
-  // contained a "MODE SENSE(10)".
-  std::array<std::uint8_t, 10> rv = {0x55,
-                                     0,
-                                     PageCode,
-                                     SubPageCode,
-                                     0,
-                                     0,
-                                     0,
-                                     uint8_t((size >> 8) & 0xFF), // size
-                                     uint8_t((size)&0xFF),
-                                     0};
+  std::array<std::uint8_t, 10> rv = {
+      0x55, 0x10, 0, 0, 0, 0, 0, uint8_t(size >> 8), uint8_t(size), 0};
   return rv;
 }
 
@@ -502,12 +488,9 @@ static CommandResult ModeSense(unsigned char PageCode,
                           Command::ModeSense(PageCode, SubPageCode, size));
 }
 
-static CommandResult ModeSelect(unsigned char PageCode,
-                                unsigned char SubPageCode, int size,
-                                const std::vector<std::uint8_t> &data)
+static CommandResult ModeSelect(const std::vector<std::uint8_t> &data)
 {
-  return ExecBytesCommand(
-      size, Command::ModeSelect(PageCode, SubPageCode, size), data);
+  return ExecBytesCommand(data.size(), Command::ModeSelect(data.size()), data);
 }
 
 static CommandResult Prefetch(long int TargetSector, unsigned int NbSectors)
@@ -621,7 +604,7 @@ static void ShowCacheValues()
     SUPERDEBUG("%s", "\ninfo: cannot read CD/DVD Capabilities page");
     RequestSense();
   }
-  result = ModeSense(CACHING_MODE_PAGE, 0, 18);
+  result = ModeSense(CACHING_MODE_PAGE, 0, 20);
   if (result.Valid)
   {
     printf(", read cache is %s", (result.Data[DESCRIPTOR_BLOCK_1 + 2] & RCD_BIT)
@@ -639,16 +622,15 @@ static bool SetCacheRCDBit(bool RCDBitValue)
 {
   bool retval = false;
 
-  auto result = ModeSense(CACHING_MODE_PAGE, 0, 18);
+  auto result = ModeSense(CACHING_MODE_PAGE, 0, 20);
   if (result.Valid)
   {
     result.Data[DESCRIPTOR_BLOCK_1 + 2] =
         (result.Data[DESCRIPTOR_BLOCK_1 + 2] & 0xFE) | RCDBitValue;
-    // this used to be 20, wtf?
-    result = ModeSelect(CACHING_MODE_PAGE, 0, 18, result.Data);
+    result = ModeSelect(result.Data);
     if (result.Valid)
     {
-      result = ModeSense(CACHING_MODE_PAGE, 0, 18);
+      result = ModeSense(CACHING_MODE_PAGE, 0, 20);
       if (result.Valid &&
           (result.Data[DESCRIPTOR_BLOCK_1 + 2] & RCD_BIT) == RCDBitValue)
       {
@@ -1462,7 +1444,7 @@ static int TestPlextorFUAInvalidationSizeWrapper(long int TargetSector,
 static bool TestRCDBitSupport()
 {
   bool retval = false;
-  auto result = ModeSense(CACHING_MODE_PAGE, 0, 18);
+  auto result = ModeSense(CACHING_MODE_PAGE, 0, 20);
   if (result.Valid)
   {
     retval = true;
