@@ -55,7 +55,6 @@ struct platform
 #define NBDELTA 50
 #define MAX_CACHE_LINES 10
 #define NB_IGNORE_MEASURES 5
-#define NB_READ_COMMANDS 6
 
 #define DESCRIPTOR_BLOCK_1                                                     \
   8 // offset of first block descriptor = size of mode parameter header
@@ -86,7 +85,7 @@ struct platform
 #define REJECTED "rejected"
 #define TESTINGPLEXFUA "\n[+] Plextor flush command: "
 #define TESTINGPLEXFUA2 "\n[+] Testing invalidation of Plextor flush command: "
-#define AVERAGE_NORMAL "\n[+] Read at %d, %.2f ms"
+#define AVERAGE_NORMAL "\n[+] Read at %s, %.2f ms"
 #define AVERAGE_FUA ", with FUA %f"
 #define CACHELINESIZE "\n[+] Cache line avg size (%d) = %5.0f kb"
 #define CACHELINENB "\n[+] Cache line numbers (%d) = %d"
@@ -124,7 +123,6 @@ static int NbBurstReadSectors = 1;
 static double Delay = 0, Delay2 = 0, InitDelay = 0;
 static double AverageDelay = 0;
 static bool ReadCommandsDetected = false;
-static unsigned int UserReadCommand = 0;
 static platform::device_handle hVolume;
 static bool DebugMode = false;
 static bool SuperDebugMode = false;
@@ -175,6 +173,25 @@ std::array<std::uint8_t, 10> Read_28h(long int TargetSector, int NbSectors,
       0,
       static_cast<std::uint8_t>(NbSectors >> 8),
       static_cast<std::uint8_t>(NbSectors),
+      0};
+  return rv;
+}
+
+std::array<std::uint8_t, 12> Read_28h_12(long int TargetSector, int NbSectors,
+                                         bool FUAbit)
+{
+  std::array<std::uint8_t, 12> rv = {
+      0x28,
+      static_cast<std::uint8_t>(FUAbit << 3),
+      static_cast<std::uint8_t>(TargetSector >> 24),
+      static_cast<std::uint8_t>(TargetSector >> 16),
+      static_cast<std::uint8_t>(TargetSector >> 8),
+      static_cast<std::uint8_t>(TargetSector),
+      static_cast<std::uint8_t>(NbSectors >> 24),
+      static_cast<std::uint8_t>(NbSectors >> 16),
+      static_cast<std::uint8_t>(NbSectors >> 8),
+      static_cast<std::uint8_t>(NbSectors),
+      0,
       0};
   return rv;
 }
@@ -419,6 +436,13 @@ static CommandResult Read_28h(long int TargetSector, int NbSectors, bool FUAbit)
                            Command::Read_28h(TargetSector, NbSectors, FUAbit));
 }
 
+static CommandResult Read_28h_12(long int TargetSector, int NbSectors,
+                                 bool FUAbit)
+{
+  return ExecSectorCommand(
+      NbSectors, Command::Read_28h_12(TargetSector, NbSectors, FUAbit));
+}
+
 static CommandResult Read_BEh(long int TargetSector, int NbSectors, bool)
 {
   return ExecSectorCommand(NbSectors,
@@ -449,16 +473,19 @@ static int CacheLineNumbers = 0;
 
 typedef struct
 {
-  unsigned char FuncByte;
+  const char *const Name;
   CommandResult (*pFunc)(long int, int, bool);
   bool Supported;
   bool FUAbitSupported;
 } sReadCommand;
 
-static sReadCommand Commands[NB_READ_COMMANDS] = {
-    {0xBE, &Read_BEh, false, false}, {0xA8, &Read_A8h, false, true},
-    {0x28, &Read_28h, false, true},  {0xD4, &Read_D4h, false, true},
-    {0xD5, &Read_D5h, false, true},  {0xD8, &Read_D8h, false, true}};
+static sReadCommand Commands[] = {
+    {"BEh", &Read_BEh, false, false}, {"A8h", &Read_A8h, false, true},
+    {"28h", &Read_28h, false, true},  {"28h_12", &Read_28h_12, false, true},
+    {"D4h", &Read_D4h, false, true},  {"D5h", &Read_D5h, false, true},
+    {"D8h", &Read_D8h, false, true}};
+
+#define NB_READ_COMMANDS (sizeof(Commands)/sizeof(*Commands))
 
 static CommandResult PlextorFUAFlush(long int TargetSector)
 {
@@ -656,7 +683,7 @@ static void TestSupportedReadCommands()
     auto result = cmd.pFunc(10000, 1, false);
     if (result.Valid)
     {
-      printf(" %2Xh", (cmd.FuncByte) & 0xFF);
+      printf(" %s", cmd.Name);
       cmd.Supported = true;
       if (cmd.FUAbitSupported)
       {
@@ -667,7 +694,7 @@ static void TestSupportedReadCommands()
         }
         else
         {
-          SUPERDEBUG("\ncommand %2Xh with FUA bit rejected", cmd.FuncByte);
+          SUPERDEBUG("\ncommand %s with FUA bit rejected", cmd.Name);
           cmd.FUAbitSupported = false;
           RequestSense();
         }
@@ -675,7 +702,7 @@ static void TestSupportedReadCommands()
     }
     else
     {
-      SUPERDEBUG("\ncommand %2Xh rejected", cmd.FuncByte);
+      SUPERDEBUG("\ncommand %s rejected", cmd.Name);
       RequestSense();
     }
   }
@@ -754,8 +781,7 @@ static int TestPlextorFUACommandWorksWrapper(long int TargetSector, int NbTests)
     {
       if (Commands[ValidReadCommand].Supported)
       {
-        DEBUG("\ninfo: using command %02Xh",
-              Commands[ValidReadCommand].FuncByte);
+        DEBUG("\ninfo: using command %s", Commands[ValidReadCommand].Name);
         retval =
             TestPlextorFUACommandWorks(ValidReadCommand, TargetSector, NbTests);
         break;
@@ -795,9 +821,7 @@ static void TimeMultipleReads(unsigned char ReadCommand, long int TargetSector,
 // compare reading times with FUA bit (to disc) and without FUA (from cache)
 static void TestCacheSpeedImpact(long int TargetSector, int NbReads)
 {
-  int i;
-
-  for (i = 0; i < NB_READ_COMMANDS; i++)
+  for (int i = 0; i < NB_READ_COMMANDS; i++)
   {
     if ((Commands[i].Supported) && (Commands[i].FUAbitSupported))
     {
@@ -805,7 +829,7 @@ static void TestCacheSpeedImpact(long int TargetSector, int NbReads)
                         false); // initial load
 
       TimeMultipleReads(i, TargetSector, NbReads, false);
-      printf(AVERAGE_NORMAL, (Commands[i].FuncByte) & 0xFF, AverageDelay);
+      printf(AVERAGE_NORMAL, Commands[i].Name, AverageDelay);
 
       TimeMultipleReads(i, TargetSector, NbReads, true); // with FUA
       printf(AVERAGE_FUA, AverageDelay);
@@ -887,8 +911,7 @@ static int TestRCDBitWorksWrapper(long int TargetSector, int NbTests)
     {
       if (Commands[ValidReadCommand].Supported)
       {
-        DEBUG("\ninfo: using command %02Xh",
-              Commands[ValidReadCommand].FuncByte);
+        DEBUG("\ninfo: using command %s", Commands[ValidReadCommand].Name);
         retval = TestRCDBitWorks(ValidReadCommand, TargetSector, NbTests);
         break;
       }
@@ -1217,8 +1240,7 @@ static int TestCacheLineSizeWrapper(long int TargetSector, int NbMeasures,
     {
       if (Commands[ValidReadCommand].Supported)
       {
-        DEBUG("\ninfo: using command %02Xh",
-              Commands[ValidReadCommand].FuncByte);
+        DEBUG("\ninfo: using command %s", Commands[ValidReadCommand].Name);
 
         switch (method)
         {
@@ -1327,8 +1349,7 @@ static int TestCacheLineNumberWrapper(long int TargetSector, int NbMeasures)
     {
       if (Commands[ValidReadCommand].Supported)
       {
-        DEBUG("\ninfo: using command %02Xh",
-              Commands[ValidReadCommand].FuncByte);
+        DEBUG("\ninfo: using command %s", Commands[ValidReadCommand].Name);
         retval =
             TestCacheLineNumber(ValidReadCommand, TargetSector, NbMeasures);
         break;
@@ -1414,8 +1435,7 @@ static int TestPlextorFUAInvalidationSizeWrapper(long int TargetSector,
     {
       if (Commands[ValidReadCommand].Supported)
       {
-        DEBUG("\ninfo: using command %02Xh",
-              Commands[ValidReadCommand].FuncByte);
+        DEBUG("\ninfo: using command %s", Commands[ValidReadCommand].Name);
         retval = TestPlextorFUAInvalidationSize(ValidReadCommand, TargetSector,
                                                 NbMeasures);
         break;
@@ -1509,8 +1529,16 @@ static void PrintUsage()
   //    printf("           -b xx  : use burst reads of size xx\n");
   //    printf("           -t xx  : threshold at xx%% for cache tests\n");
   printf("           -x xx  : use cached/non cached ratio xx\n");
-  printf("           -r xx  : use read command xx (one of 0xbe, 0x28, 0xd5, "
-         "0xd4, 0xd8)\n");
+  printf("           -r xx  : use read command xx (one of ");
+  for (int i = 0; i < NB_READ_COMMANDS; ++i)
+  {
+    printf("%s", Commands[i].Name);
+    if (i != (NB_READ_COMMANDS - 1))
+    {
+      printf(", ");
+    }
+  }
+  printf(")\n");
   printf("           -s xx  : set read speed to xx (0=max)\n");
   printf("           -m xx  : look for cache size up to xx sectors\n");
   //    printf("           -y xx  : use xx sectors for cache test method 2\n");
@@ -1537,6 +1565,7 @@ int main(int argc, char **argv)
   int NbSectorsMethod2 = 1000;
   int InvalidatedSectors = 0;
   int Nbtests = 0;
+  const char *UserReadCommand = nullptr;
 
   // --------------- setup ---------------------------
   printf("\nCacheExplorer 0.10 - https://github.com/xavery/cachex, based on\n");
@@ -1593,7 +1622,7 @@ int main(int argc, char **argv)
         break;
       case 'r':
         i++;
-        sscanf(argv[i], "0x%x", &UserReadCommand);
+        UserReadCommand = argv[i];
         break;
       case 's':
         SetMaxDriveSpeed = true;
@@ -1673,18 +1702,18 @@ int main(int argc, char **argv)
     TestSupportedReadCommands();
   }
 
-  if (UserReadCommand != 0)
+  if (UserReadCommand != nullptr)
   {
     ReadCommandsDetected = false;
     for (j = 0; j < NB_READ_COMMANDS; j++)
     {
-      Commands[j].Supported =
-          false; // override commands detection by user selection
+      // override commands detection by user selection
+      Commands[j].Supported = false;
     }
 
     for (j = 0; j < NB_READ_COMMANDS; j++)
     {
-      if (UserReadCommand == Commands[j].FuncByte)
+      if (strcmp(UserReadCommand, Commands[j].Name) == 0)
       {
         auto result = Commands[j].pFunc(10000, 1, false);
         if (result.Valid)
@@ -1695,16 +1724,14 @@ int main(int argc, char **argv)
         }
         else
         {
-          printf("\nError: command %02Xh not supported\n",
-                 UserReadCommand & 0xFF);
+          printf("\nError: command %s not supported\n", UserReadCommand);
           exit(-1);
         }
       }
     }
     if (j == NB_READ_COMMANDS)
     {
-      printf("\nError: command %02Xh is not recognized\n",
-             UserReadCommand & 0xFF);
+      printf("\nError: command %s is not recognized\n", UserReadCommand);
       exit(-1);
     }
   }
