@@ -485,7 +485,7 @@ static sReadCommand Commands[] = {
     {"D4h", &Read_D4h, false, true},  {"D5h", &Read_D5h, false, true},
     {"D8h", &Read_D8h, false, true}};
 
-#define NB_READ_COMMANDS (sizeof(Commands)/sizeof(*Commands))
+#define NB_READ_COMMANDS (sizeof(Commands) / sizeof(*Commands))
 
 static CommandResult PlextorFUAFlush(long int TargetSector)
 {
