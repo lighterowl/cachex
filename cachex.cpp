@@ -680,24 +680,19 @@ static void TestSupportedReadCommands()
   for (int i = 0; i < NB_READ_COMMANDS; i++)
   {
     auto &&cmd = Commands[i];
-    auto result = cmd.pFunc(10000, 1, false);
-    if (result.Valid)
+    if (cmd.pFunc(10000, 1, false))
     {
       printf(" %s", cmd.Name);
       cmd.Supported = true;
-      if (cmd.FUAbitSupported)
+      if (cmd.FUAbitSupported && cmd.pFunc(9900, 1, true))
       {
-        result = cmd.pFunc(9900, 1, true);
-        if (result.Valid)
-        {
-          printf(FUAMSG);
-        }
-        else
-        {
-          SUPERDEBUG("\ncommand %s with FUA bit rejected", cmd.Name);
-          cmd.FUAbitSupported = false;
-          RequestSense();
-        }
+        printf(FUAMSG);
+      }
+      else
+      {
+        SUPERDEBUG("\ncommand %s with FUA bit rejected", cmd.Name);
+        cmd.FUAbitSupported = false;
+        RequestSense();
       }
     }
     else
@@ -1715,8 +1710,7 @@ int main(int argc, char **argv)
     {
       if (strcmp(UserReadCommand, Commands[j].Name) == 0)
       {
-        auto result = Commands[j].pFunc(10000, 1, false);
-        if (result.Valid)
+        if (Commands[j].pFunc(10000, 1, false))
         {
           Commands[j].Supported = true;
           ReadCommandsDetected = true;
