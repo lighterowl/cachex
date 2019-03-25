@@ -1568,7 +1568,7 @@ int main(int argc, char **argv)
   const char *UserReadCommand = nullptr;
 
   // --------------- setup ---------------------------
-  printf("\nCacheExplorer 0.10 - https://github.com/xavery/cachex, based on\n");
+  printf("\nCacheExplorer 0.10 - https://github.com/xavery/cachex, based on");
   printf("\nCacheExplorer 0.9 - spath@cdfreaks.com\n");
 
   // ------------ command line parsing --------------
