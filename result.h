@@ -4,6 +4,8 @@
 #include <cstdint>
 #include <vector>
 
+#include "scsi_status.h"
+
 struct CommandResult
 {
   CommandResult(unsigned int NumOutBytes)
@@ -15,6 +17,10 @@ struct CommandResult
   double Duration;
   bool Valid;
   std::uint8_t ScsiStatus;
+  
+  operator bool() const {
+      return Valid && ScsiStatus == ScsiStatus::GOOD;
+  }
 };
 
 #endif

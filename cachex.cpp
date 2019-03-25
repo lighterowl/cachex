@@ -48,16 +48,6 @@ struct platform
 #include <array>
 #include <vector>
 
-#define SCSISTAT_GOOD 0x00
-#define SCSISTAT_CHECK_CONDITION 0x02
-#define SCSISTAT_CONDITION_MET 0x04
-#define SCSISTAT_BUSY 0x08
-#define SCSISTAT_INTERMEDIATE 0x10
-#define SCSISTAT_INTERMEDIATE_COND_MET 0x14
-#define SCSISTAT_RESERVATION_CONFLICT 0x18
-#define SCSISTAT_COMMAND_TERMINATED 0x22
-#define SCSISTAT_QUEUE_FULL 0x28
-
 //#define RELEASE_VERSION
 #undef RELEASE_VERSION
 
@@ -592,7 +582,7 @@ static CommandResult SetDriveSpeed(unsigned char ReadSpeedX,
 static void ShowCacheValues()
 {
   auto result = ModeSense(CD_DVD_CAPABILITIES_PAGE, 0, 32);
-  if (result.Valid)
+  if (result)
   {
     printf("\n[+] Buffer size: %d kB",
            (result.Data[DESCRIPTOR_BLOCK_1 + 12] << 8) |
@@ -604,7 +594,7 @@ static void ShowCacheValues()
     RequestSense();
   }
   result = ModeSense(CACHING_MODE_PAGE, 0, 20);
-  if (result.Valid)
+  if (result)
   {
     printf(", read cache is %s", (result.Data[DESCRIPTOR_BLOCK_1 + 2] & RCD_BIT)
                                      ? "disabled"
@@ -622,15 +612,15 @@ static bool SetCacheRCDBit(bool RCDBitValue)
   bool retval = false;
 
   auto result = ModeSense(CACHING_MODE_PAGE, 0, 20);
-  if (result.Valid)
+  if (result)
   {
     result.Data[DESCRIPTOR_BLOCK_1 + 2] =
         (result.Data[DESCRIPTOR_BLOCK_1 + 2] & 0xFE) | RCDBitValue;
     result = ModeSelect(result.Data);
-    if (result.Valid)
+    if (result)
     {
       result = ModeSense(CACHING_MODE_PAGE, 0, 20);
-      if (result.Valid &&
+      if (result &&
           (result.Data[DESCRIPTOR_BLOCK_1 + 2] & RCD_BIT) == RCDBitValue)
       {
         retval = true;
@@ -700,9 +690,9 @@ static bool TestPlextorFUACommand()
 {
   printf(TESTINGPLEXFUA);
   auto result = PlextorFUAFlush(100000);
-  printf("%s", result.Valid ? ACCEPTED : REJECTED);
+  printf("%s", result ? ACCEPTED : REJECTED);
   DEBUG(" (status = %d)", result.ScsiStatus);
-  return result.Valid;
+  return result;
 }
 
 //
@@ -1443,8 +1433,7 @@ static int TestPlextorFUAInvalidationSizeWrapper(long int TargetSector,
 static bool TestRCDBitSupport()
 {
   bool retval = false;
-  auto result = ModeSense(CACHING_MODE_PAGE, 0, 20);
-  if (result.Valid)
+  if (ModeSense(CACHING_MODE_PAGE, 0, 20))
   {
     retval = true;
   }
@@ -1474,11 +1463,11 @@ static int TestCacheLineSizePrefetch(long int TargetSector)
   int NbSectors = 1;
 
   auto result = Prefetch(TargetSector, NbSectors);
-  while (result.ScsiStatus == SCSISTAT_CONDITION_MET)
+  while (result.ScsiStatus == ScsiStatus::CONDITION_MET)
   {
     result = Prefetch(TargetSector, NbSectors++);
   }
-  if ((result.ScsiStatus == SCSISTAT_GOOD) && (NbSectors > 1))
+  if ((result.ScsiStatus == ScsiStatus::GOOD) && (NbSectors > 1))
   {
     printf("\n-> cache size = %d kB, %d sectors",
            (int)((NbSectors - 1) * 2352 / 1024), NbSectors - 1);
