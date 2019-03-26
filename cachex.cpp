@@ -269,28 +269,11 @@ std::array<std::uint8_t, 12> Read_D8h(long int TargetSector, int NbSectors,
 
 std::array<std::uint8_t, 12> PlextorFUAFlush(long int TargetSector)
 {
-  // this is just a Read28h with NbSectors = 0 and FUAbit = true. however, the
-  // original code declared the CDB size as 12. whether this was a typo or not
-  // remains unknown, which is why this code replicates the original behaviour
-  std::array<std::uint8_t, 12> rv = {
-      0x28, // READ(10) command
-      0x08, // FUA
-      static_cast<std::uint8_t>(TargetSector >> 24),
-      static_cast<std::uint8_t>(TargetSector >> 16),
-      static_cast<std::uint8_t>(TargetSector >> 8),
-      static_cast<std::uint8_t>(TargetSector),
-      0,
-      0,
-      0,
-      0,
-      0,
-      0
-      // size stays zero, that's how this command works
-      // MMC spec specifies that "A Transfer Length of zero indicates that no
-      // logical blocks shall be transferred. This condition shall not be
-      // considered an error"
-  };
-  return rv;
+  // size stays zero, that's how this command works
+  // MMC spec specifies that "A Transfer Length of zero indicates that no
+  // logical blocks shall be transferred. This condition shall not be
+  // considered an error"
+  return Read_28h_12(TargetSector, 0, 1);
 }
 
 std::array<std::uint8_t, 6> RequestSense(std::uint8_t AllocationLength)
