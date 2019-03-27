@@ -125,7 +125,6 @@ namespace
 int NbBurstReadSectors = 1;
 double Delay = 0, Delay2 = 0, InitDelay = 0;
 double AverageDelay = 0;
-bool ReadCommandsDetected = false;
 platform::device_handle hVolume;
 bool DebugMode = false;
 bool SuperDebugMode = false;
@@ -641,14 +640,16 @@ bool SetCacheRCDBit(bool RCDBitValue)
 // test and display which read commands are supported by the current drive
 // and if any of these commands supports the FUA bit
 //------------------------------------------------------------------------------
-void TestSupportedReadCommands()
+bool TestSupportedReadCommands()
 {
   printf(SUPPORTEDREADCOMMANDS);
+  bool rv = false;
   for (int i = 0; i < NB_READ_COMMANDS; i++)
   {
     auto &&cmd = Commands[i];
     if (cmd.pFunc(10000, 1, false))
     {
+      rv = true;
       printf(" %s", cmd.Name);
       cmd.Supported = true;
       if (cmd.FUAbitSupported && cmd.pFunc(9900, 1, true))
@@ -668,7 +669,7 @@ void TestSupportedReadCommands()
       RequestSense();
     }
   }
-  ReadCommandsDetected = true;
+  return rv;
 }
 
 //
@@ -736,24 +737,16 @@ int TestPlextorFUACommandWorksWrapper(long int TargetSector, int NbTests)
   int ValidReadCommand;
   int retval = 0;
 
-  if (ReadCommandsDetected)
+  for (ValidReadCommand = 0; ValidReadCommand < NB_READ_COMMANDS;
+       ValidReadCommand++)
   {
-    for (ValidReadCommand = 0; ValidReadCommand < NB_READ_COMMANDS;
-         ValidReadCommand++)
+    if (Commands[ValidReadCommand].Supported)
     {
-      if (Commands[ValidReadCommand].Supported)
-      {
-        DEBUG("\ninfo: using command %s", Commands[ValidReadCommand].Name);
-        retval =
-            TestPlextorFUACommandWorks(ValidReadCommand, TargetSector, NbTests);
-        break;
-      }
+      DEBUG("\ninfo: using command %s", Commands[ValidReadCommand].Name);
+      retval =
+          TestPlextorFUACommandWorks(ValidReadCommand, TargetSector, NbTests);
+      break;
     }
-  }
-  else
-  {
-    printf(READCOMMANDSNOTTESTED);
-    exit(-1);
   }
   return retval;
 }
@@ -866,23 +859,15 @@ int TestRCDBitWorksWrapper(long int TargetSector, int NbTests)
   int ValidReadCommand;
   int retval = -1;
 
-  if (ReadCommandsDetected)
+  for (ValidReadCommand = 0; ValidReadCommand < NB_READ_COMMANDS;
+       ValidReadCommand++)
   {
-    for (ValidReadCommand = 0; ValidReadCommand < NB_READ_COMMANDS;
-         ValidReadCommand++)
+    if (Commands[ValidReadCommand].Supported)
     {
-      if (Commands[ValidReadCommand].Supported)
-      {
-        DEBUG("\ninfo: using command %s", Commands[ValidReadCommand].Name);
-        retval = TestRCDBitWorks(ValidReadCommand, TargetSector, NbTests);
-        break;
-      }
+      DEBUG("\ninfo: using command %s", Commands[ValidReadCommand].Name);
+      retval = TestRCDBitWorks(ValidReadCommand, TargetSector, NbTests);
+      break;
     }
-  }
-  else
-  {
-    printf(READCOMMANDSNOTTESTED);
-    exit(-1);
   }
   return retval;
 }
@@ -1194,40 +1179,32 @@ int TestCacheLineSizeWrapper(long int TargetSector, int NbMeasures,
   int ValidReadCommand;
   int retval = -1;
 
-  if (ReadCommandsDetected)
+  for (ValidReadCommand = 0; ValidReadCommand < NB_READ_COMMANDS;
+       ValidReadCommand++)
   {
-    for (ValidReadCommand = 0; ValidReadCommand < NB_READ_COMMANDS;
-         ValidReadCommand++)
+    if (Commands[ValidReadCommand].Supported)
     {
-      if (Commands[ValidReadCommand].Supported)
-      {
-        DEBUG("\ninfo: using command %s", Commands[ValidReadCommand].Name);
+      DEBUG("\ninfo: using command %s", Commands[ValidReadCommand].Name);
 
-        switch (method)
-        {
-        case 1:
-          retval = TestCacheLineSize_Wrap(ValidReadCommand, TargetSector,
-                                          NbMeasures);
-          break;
-        case 2:
-          retval = TestCacheLineSize_Straight(ValidReadCommand, TargetSector,
-                                              NbMeasures);
-          break;
-        case 3:
-          retval = TestCacheLineSize_Stat(ValidReadCommand, TargetSector,
-                                          NbMeasures, BurstSize);
-          break;
-        default:
-          printf("\nError: invalid method !!\n");
-        }
+      switch (method)
+      {
+      case 1:
+        retval =
+            TestCacheLineSize_Wrap(ValidReadCommand, TargetSector, NbMeasures);
         break;
+      case 2:
+        retval = TestCacheLineSize_Straight(ValidReadCommand, TargetSector,
+                                            NbMeasures);
+        break;
+      case 3:
+        retval = TestCacheLineSize_Stat(ValidReadCommand, TargetSector,
+                                        NbMeasures, BurstSize);
+        break;
+      default:
+        printf("\nError: invalid method !!\n");
       }
+      break;
     }
-  }
-  else
-  {
-    printf(READCOMMANDSNOTTESTED);
-    exit(-1);
   }
   return retval;
 }
@@ -1303,24 +1280,15 @@ int TestCacheLineNumberWrapper(long int TargetSector, int NbMeasures)
   int ValidReadCommand;
   int retval = -1;
 
-  if (ReadCommandsDetected)
+  for (ValidReadCommand = 0; ValidReadCommand < NB_READ_COMMANDS;
+       ValidReadCommand++)
   {
-    for (ValidReadCommand = 0; ValidReadCommand < NB_READ_COMMANDS;
-         ValidReadCommand++)
+    if (Commands[ValidReadCommand].Supported)
     {
-      if (Commands[ValidReadCommand].Supported)
-      {
-        DEBUG("\ninfo: using command %s", Commands[ValidReadCommand].Name);
-        retval =
-            TestCacheLineNumber(ValidReadCommand, TargetSector, NbMeasures);
-        break;
-      }
+      DEBUG("\ninfo: using command %s", Commands[ValidReadCommand].Name);
+      retval = TestCacheLineNumber(ValidReadCommand, TargetSector, NbMeasures);
+      break;
     }
-  }
-  else
-  {
-    printf(READCOMMANDSNOTTESTED);
-    exit(-1);
   }
   return retval;
 }
@@ -1388,24 +1356,16 @@ int TestPlextorFUAInvalidationSizeWrapper(long int TargetSector, int NbMeasures)
   int ValidReadCommand;
   int retval = -1;
 
-  if (ReadCommandsDetected)
+  for (ValidReadCommand = 0; ValidReadCommand < NB_READ_COMMANDS;
+       ValidReadCommand++)
   {
-    for (ValidReadCommand = 0; ValidReadCommand < NB_READ_COMMANDS;
-         ValidReadCommand++)
+    if (Commands[ValidReadCommand].Supported)
     {
-      if (Commands[ValidReadCommand].Supported)
-      {
-        DEBUG("\ninfo: using command %s", Commands[ValidReadCommand].Name);
-        retval = TestPlextorFUAInvalidationSize(ValidReadCommand, TargetSector,
-                                                NbMeasures);
-        break;
-      }
+      DEBUG("\ninfo: using command %s", Commands[ValidReadCommand].Name);
+      retval = TestPlextorFUAInvalidationSize(ValidReadCommand, TargetSector,
+                                              NbMeasures);
+      break;
     }
-  }
-  else
-  {
-    printf(READCOMMANDSNOTTESTED);
-    exit(-1);
   }
   return retval;
 }
@@ -1661,7 +1621,11 @@ int main(int argc, char **argv)
   if (ShowDriveInfos)
   {
     ShowCacheValues();
-    TestSupportedReadCommands();
+    if (!TestSupportedReadCommands())
+    {
+      printf("\nError: no supported commands found\n");
+      exit(-1);
+    }
   }
 
   if (UserReadCommand != nullptr)
@@ -1675,17 +1639,9 @@ int main(int argc, char **argv)
       exit(-1);
     }
 
-    ReadCommandsDetected = false;
-    for (auto &&cmd : Commands)
-    {
-      // override commands detection by user selection
-      cmd.Supported = false;
-    }
-
     if (chosen_cmd->pFunc(10000, 1, false))
     {
       chosen_cmd->Supported = true;
-      ReadCommandsDetected = true;
     }
     else
     {
