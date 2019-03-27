@@ -43,20 +43,19 @@ struct platform
 
 #include <cassert>
 #include <cstdint>
-#include <cstdio>
+#include <cstring>
 
 #include <algorithm>
 #include <array>
+#include <iomanip>
+#include <iostream>
 #include <vector>
-
-//#define RELEASE_VERSION
-#undef RELEASE_VERSION
 
 #define MAX_CACHE_LINES 10
 #define NB_IGNORE_MEASURES 5
 
-#define DESCRIPTOR_BLOCK_1                                                     \
-  8 // offset of first block descriptor = size of mode parameter header
+// offset of first block descriptor = size of mode parameter header
+#define DESCRIPTOR_BLOCK_1 8
 
 #define CACHING_MODE_PAGE 0x08
 #define CD_DVD_CAPABILITIES_PAGE 0x2A
@@ -64,58 +63,6 @@ struct platform
 #define RCD_BIT 1
 #define RCD_READ_CACHE_ENABLED 0
 #define RCD_READ_CACHE_DISABLED 1
-
-#define DEBUG(fmt, ...)                                                        \
-  if (DebugMode)                                                               \
-    printf(fmt, __VA_ARGS__);
-
-#define SUPERDEBUG(fmt, ...)                                                   \
-  if (SuperDebugMode)                                                          \
-    printf(fmt, __VA_ARGS__);
-
-#ifndef RELEASE_VERSION
-#define TESTINGSTRING "\n[+] Testing %Xh... "
-#define SUPPORTEDREADCOMMANDS "\n[+] Supported read commands:"
-#define FUATEST " FUA:"
-#define FUAMSG "(FUA)"
-#define NOTSUPPORTED "not supported"
-#define OK "ok"
-#define ACCEPTED "accepted"
-#define REJECTED "rejected"
-#define TESTINGPLEXFUA "\n[+] Plextor flush command: "
-#define TESTINGPLEXFUA2 "\n[+] Testing invalidation of Plextor flush command: "
-#define AVERAGE_NORMAL "\n[+] Read at %s, %.2f ms"
-#define AVERAGE_FUA ", with FUA %f"
-#define CACHELINESIZE "\n[+] Cache line avg size (%d) = %5.0f kb"
-#define CACHELINENB "\n[+] Cache line numbers (%d) = %d"
-#define READCOMMANDSNOTTESTED                                                  \
-  "\nError: No read command specified, use -i or -r switch\n"
-#define FUAINVALIDATIONSIZE "\n-> Invalidated : %d sectors"
-#define CACHELINENBTEST "\n[+] Testing cache line numbers:"
-#define CACHELINESIZETEST "\n[+] Testing cache line size (method %d):"
-#define CACHELINESIZETEST2 "\n[+] Testing cache line size:"
-#define SPINNINGDRIVE "\ninfo: spinning the drive... "
-#define CACHELINESIZE2 "\n %d kB / %d sectors"
-#else
-#define TESTINGSTRING "%X"
-#define SUPPORTEDREADCOMMANDS "\nSRC:"
-#define FUATEST "|"
-#define NOTSUPPORTED "-"
-#define OK "+"
-#define ACCEPTED "accepted"
-#define REJECTED "rejected"
-#define FUA ""
-#define FUAMSG "f"
-#define TESTINGPLEXFUA " PF:"
-#define AVERAGE_NORMAL "\n0x%2X avn = %f"
-#define AVERAGE_FUA " avf = %f"
-#define CACHELINESIZE "\ncls(%d) = %5.0f"
-#define CACHELINENB "\ncln(%d) = %d"
-#define READCOMMANDSNOTTESTED ""
-#define FUAINVALIDATIONSIZE "\ninvfua = %d"
-#define SPINNINGDRIVE ""
-#define CACHELINESIZE2 "\n%d (%.2f / %.2f -> %.2f)"
-#endif
 
 namespace
 {
@@ -129,6 +76,38 @@ bool SuperDebugMode = false;
 double ThresholdRatioMethod2 = 0.9;
 int CachedNonCachedSpeedFactor = 4;
 int MaxCacheSectors = 1000;
+
+struct debugstream
+{
+  debugstream() {}
+  debugstream(const debugstream &) = delete;
+  template <typename T> debugstream &operator<<(T val)
+  {
+    if (DebugMode)
+    {
+      std::cerr << val;
+    }
+    return *this;
+  }
+};
+
+debugstream DEBUG;
+
+struct superdebugstream
+{
+  superdebugstream() {}
+  superdebugstream(const superdebugstream &) = delete;
+  template <typename T> superdebugstream &operator<<(T val)
+  {
+    if (SuperDebugMode)
+    {
+      std::cerr << val;
+    }
+    return *this;
+  }
+};
+
+superdebugstream SUPERDEBUG;
 
 template <std::size_t N> using bytearray = std::array<std::uint8_t, N>;
 
@@ -496,7 +475,7 @@ void PrintIDString(unsigned char *dataChars, int dataLength)
 {
   if (dataChars)
   {
-    printf(" ");
+    std::cerr << ' ';
     while (0 < dataLength--)
     {
       auto cc = *dataChars++;
@@ -505,7 +484,7 @@ void PrintIDString(unsigned char *dataChars, int dataLength)
       {
         cc ^= 0x40;
       }
-      printf("%c", cc);
+      std::cerr << static_cast<char>(cc);
     }
   }
 }
@@ -543,7 +522,7 @@ bool ClearCache()
 bool SpinDrive(unsigned int Seconds)
 {
   auto &&cmd = GetSupportedCommand();
-  DEBUG("%s", SPINNINGDRIVE);
+  DEBUG << "\ninfo: spinning the drive... ";
   auto TimeStart = platform::monotonic_clock();
   int i = 0;
   while (platform::monotonic_clock() - TimeStart <= (Seconds * 1000))
@@ -563,25 +542,26 @@ void ShowCacheValues()
   auto result = ModeSense(CD_DVD_CAPABILITIES_PAGE, 0, 32);
   if (result)
   {
-    printf("\n[+] Buffer size: %d kB",
-           (result.Data[DESCRIPTOR_BLOCK_1 + 12] << 8) |
-               result.Data[DESCRIPTOR_BLOCK_1 + 13]);
+    std::cerr << "\n[+] Buffer size: "
+              << ((result.Data[DESCRIPTOR_BLOCK_1 + 12] << 8) |
+                  result.Data[DESCRIPTOR_BLOCK_1 + 13])
+              << " kB";
   }
   else
   {
-    SUPERDEBUG("%s", "\ninfo: cannot read CD/DVD Capabilities page");
+    SUPERDEBUG << "\ninfo: cannot read CD/DVD Capabilities page";
     RequestSense();
   }
   result = ModeSense(CACHING_MODE_PAGE, 0, 20);
   if (result)
   {
-    printf(", read cache is %s", (result.Data[DESCRIPTOR_BLOCK_1 + 2] & RCD_BIT)
-                                     ? "disabled"
-                                     : "enabled");
+    std::cerr << ", read cache is "
+              << ((result.Data[DESCRIPTOR_BLOCK_1 + 2] & RCD_BIT) ? "disabled"
+                                                                  : "enabled");
   }
   else
   {
-    SUPERDEBUG("%s", "\ninfo: cannot read Caching Mode page");
+    SUPERDEBUG << "\ninfo: cannot read Caching Mode page";
     RequestSense();
   }
 }
@@ -608,13 +588,13 @@ bool SetCacheRCDBit(bool RCDBitValue)
 
     if (!retval)
     {
-      DEBUG("%s", "\ninfo: cannot write Caching Mode page");
+      DEBUG << "\ninfo: cannot write Caching Mode page";
       RequestSense();
     }
   }
   else
   {
-    DEBUG("%s", "\ninfo: cannot read Caching Mode page");
+    DEBUG << "\ninfo: cannot read Caching Mode page";
     RequestSense();
   }
   return (retval);
@@ -628,29 +608,29 @@ bool SetCacheRCDBit(bool RCDBitValue)
 //------------------------------------------------------------------------------
 bool TestSupportedReadCommands()
 {
-  printf(SUPPORTEDREADCOMMANDS);
+  std::cerr << "\n[+] Supported read commands:";
   bool rv = false;
   for (auto &&cmd : Commands)
   {
     if (cmd.pFunc(10000, 1, false))
     {
       rv = true;
-      printf(" %s", cmd.Name);
+      std::cerr << ' ' << cmd.Name;
       cmd.Supported = true;
       if (cmd.FUAbitSupported && cmd.pFunc(9900, 1, true))
       {
-        printf(FUAMSG);
+        std::cerr << "(FUA)";
       }
       else
       {
-        SUPERDEBUG("\ncommand %s with FUA bit rejected", cmd.Name);
+        SUPERDEBUG << "\ncommand " << cmd.Name << " with FUA bit rejected";
         cmd.FUAbitSupported = false;
         RequestSense();
       }
     }
     else
     {
-      SUPERDEBUG("\ncommand %s rejected", cmd.Name);
+      SUPERDEBUG << "\ncommand " << cmd.Name << " rejected";
       RequestSense();
     }
   }
@@ -663,10 +643,10 @@ bool TestSupportedReadCommands()
 // test if Plextor's flushing command is supported
 bool TestPlextorFUACommand()
 {
-  printf(TESTINGPLEXFUA);
+  std::cerr << "\n[+] Plextor flush command: ";
   auto result = PlextorFUAFlush(100000);
-  printf("%s", result ? ACCEPTED : REJECTED);
-  DEBUG(" (status = %d)", result.ScsiStatus);
+  std::cerr << (result ? "accepted" : "rejected");
+  DEBUG << " (status = " << static_cast<int>(result.ScsiStatus) << ")";
   return result;
 }
 
@@ -680,8 +660,9 @@ int TestPlextorFUACommandWorks(sReadCommand &ReadCommand, long int TargetSector,
   int InvalidationSuccess = 0;
   double InitDelay2 = 0;
 
-  DEBUG("\ninfo: %d test(s), c/nc ratio: %d, burst: %d, max: %d", NbTests,
-        CachedNonCachedSpeedFactor, NbBurstReadSectors, MaxCacheSectors);
+  DEBUG << "\ninfo: " << NbTests
+        << " test(s), c/nc ratio: " << CachedNonCachedSpeedFactor
+        << ", burst: " << NbBurstReadSectors << ", max: " << MaxCacheSectors;
 
   for (int i = 0; i < NbTests; i++)
   {
@@ -703,8 +684,9 @@ int TestPlextorFUACommandWorks(sReadCommand &ReadCommand, long int TargetSector,
     result = ReadCommand.pFunc(TargetSector + NbBurstReadSectors,
                                NbBurstReadSectors, false);
     Delay2 = result.Duration;
-    DEBUG("\n %.2f ms / %.2f ms -> %.2f ms / %.2f ms", InitDelay, Delay,
-          InitDelay2, Delay2);
+    DEBUG << "\n " << std::setprecision(2) << InitDelay << " ms / "
+          << std::setprecision(2) << Delay << " ms -> " << std::setprecision(2)
+          << InitDelay2 << " ms / " << std::setprecision(2) << Delay2 << " ms";
 
     // compare times
     if (Delay2 > (CachedNonCachedSpeedFactor * Delay))
@@ -712,7 +694,7 @@ int TestPlextorFUACommandWorks(sReadCommand &ReadCommand, long int TargetSector,
       InvalidationSuccess++;
     }
   }
-  DEBUG("%s", "\nresult: ");
+  DEBUG << "\nresult: ";
   return (InvalidationSuccess);
 }
 
@@ -720,7 +702,7 @@ int TestPlextorFUACommandWorks(sReadCommand &ReadCommand, long int TargetSector,
 int TestPlextorFUACommandWorksWrapper(long int TargetSector, int NbTests)
 {
   auto &&cmd = GetSupportedCommand();
-  DEBUG("\ninfo: using command %s", cmd.Name);
+  DEBUG << "\ninfo: using command " << cmd.Name;
   return TestPlextorFUACommandWorks(cmd, TargetSector, NbTests);
 }
 
@@ -751,16 +733,16 @@ void TestCacheSpeedImpact(long int TargetSector, int NbReads)
   auto cmd = GetFUASupportedCommand();
   if (!cmd)
   {
-    printf("This function requires FUA support\n");
+    std::cerr << "This function requires FUA support\n";
     return;
   }
 
   cmd->pFunc(TargetSector, NbBurstReadSectors, false); // initial load
-  printf(AVERAGE_NORMAL, cmd->Name,
-         TimeMultipleReads(*cmd, TargetSector, NbReads, false));
+  std::cerr << "\n[+] Read at " << cmd->Name << ", " << std::setprecision(2)
+            << TimeMultipleReads(*cmd, TargetSector, NbReads, false) << " ms";
 
-  // with FUA
-  printf(AVERAGE_FUA, TimeMultipleReads(*cmd, TargetSector, NbReads, true));
+  std::cerr << ", with FUA "
+            << TimeMultipleReads(*cmd, TargetSector, NbReads, true);
 }
 
 //
@@ -773,8 +755,9 @@ int TestRCDBitWorks(sReadCommand &ReadCommand, long int TargetSector,
   int i;
   int InvalidationSuccess = 0;
 
-  DEBUG("\ninfo: %d test(s), c/nc ratio: %d, burst: %d, max: %d", NbTests,
-        CachedNonCachedSpeedFactor, NbBurstReadSectors, MaxCacheSectors);
+  DEBUG << "\ninfo: " << NbTests
+        << " test(s), c/nc ratio: " << CachedNonCachedSpeedFactor
+        << ", burst: " << NbBurstReadSectors << ", max: " << MaxCacheSectors;
   for (i = 0; i < NbTests; i++)
   {
     // enable caching
@@ -792,8 +775,9 @@ int TestRCDBitWorks(sReadCommand &ReadCommand, long int TargetSector,
     result = ReadCommand.pFunc(TargetSector + NbBurstReadSectors,
                                NbBurstReadSectors, false);
     Delay = result.Duration;
-    DEBUG("\n1) %d : %.2f ms / %d : %.2f ms", TargetSector, InitDelay,
-          TargetSector + NbBurstReadSectors, Delay);
+    DEBUG << "\n1) " << TargetSector << " : " << std::setprecision(2)
+          << InitDelay << " ms / " << (TargetSector + NbBurstReadSectors)
+          << " : " << std::setprecision(2) << Delay << " ms";
 
     // disable caching
     if (!SetCacheRCDBit(RCD_READ_CACHE_DISABLED))
@@ -810,8 +794,9 @@ int TestRCDBitWorks(sReadCommand &ReadCommand, long int TargetSector,
     ReadCommand.pFunc(TargetSector + NbBurstReadSectors, NbBurstReadSectors,
                       false);
     Delay2 = result.Duration;
-    DEBUG("\n2) %d : %.2f ms / %d : %.2f ms", TargetSector, InitDelay,
-          TargetSector + NbBurstReadSectors, Delay2);
+    DEBUG << "\n2) " << TargetSector << " : " << std::setprecision(2)
+          << InitDelay << " ms / " << (TargetSector + NbBurstReadSectors)
+          << " : " << std::setprecision(2) << Delay2 << " ms";
 
     // compare times
     if (Delay2 > (CachedNonCachedSpeedFactor * Delay))
@@ -819,7 +804,7 @@ int TestRCDBitWorks(sReadCommand &ReadCommand, long int TargetSector,
       InvalidationSuccess++;
     }
   }
-  DEBUG("\nresult: %d/%d\n", InvalidationSuccess, NbTests);
+  DEBUG << "\nresult: " << InvalidationSuccess << '/' << NbTests << '\n';
   return (InvalidationSuccess);
 }
 
@@ -827,7 +812,7 @@ int TestRCDBitWorks(sReadCommand &ReadCommand, long int TargetSector,
 int TestRCDBitWorksWrapper(long int TargetSector, int NbTests)
 {
   auto &&cmd = GetSupportedCommand();
-  DEBUG("\ninfo: using command %s", cmd.Name);
+  DEBUG << "\ninfo: using command " << cmd.Name;
   return TestRCDBitWorks(cmd, TargetSector, NbTests);
 }
 
@@ -849,8 +834,9 @@ int TestCacheLineSize_Straight(sReadCommand &ReadCommand, long int TargetSector,
   int MaxCacheLineSize = 0;
   double PreviousDelay, InitialDelay;
 
-  DEBUG("\ninfo: %d test(s), c/nc ratio: %d, burst: %d, max: %d", NbMeasures,
-        CachedNonCachedSpeedFactor, NbBurstReadSectors, MaxCacheSectors);
+  DEBUG << "\ninfo: " << NbMeasures
+        << " test(s), c/nc ratio: " << CachedNonCachedSpeedFactor
+        << ", burst: " << NbBurstReadSectors << ", max: " << MaxCacheSectors;
   for (i = 0; i < NbMeasures; i++)
   {
     ClearCache();
@@ -860,7 +846,7 @@ int TestCacheLineSize_Straight(sReadCommand &ReadCommand, long int TargetSector,
     // with a number of sectors following this one.
     auto result = ReadCommand.pFunc(TargetSector, NbBurstReadSectors, false);
     InitialDelay = result.Duration;
-    SUPERDEBUG("\n init %d: %f", TargetSector, InitialDelay);
+    SUPERDEBUG << "\n init " << TargetSector << ": " << InitialDelay;
 
     // read 1 sector at a time and time the reads until one takes more
     // than [CachedNonCachedSpeedFactor] times the delay taken by the
@@ -871,7 +857,8 @@ int TestCacheLineSize_Straight(sReadCommand &ReadCommand, long int TargetSector,
       auto result = ReadCommand.pFunc(TargetSector + TargetSectorOffset,
                                       NbBurstReadSectors, false);
       Delay = result.Duration;
-      SUPERDEBUG("\n %d: %f", TargetSector + TargetSectorOffset, Delay);
+      SUPERDEBUG << "\n init " << (TargetSector + TargetSectorOffset) << ": "
+                 << Delay;
 
       if (Delay >= (CachedNonCachedSpeedFactor * PreviousDelay))
       {
@@ -886,9 +873,11 @@ int TestCacheLineSize_Straight(sReadCommand &ReadCommand, long int TargetSector,
     if (TargetSectorOffset < MaxCacheSectors)
     {
       CacheLineSize = TargetSectorOffset;
-      printf(CACHELINESIZE2, (int)((CacheLineSize * 2352) / 1024),
-             CacheLineSize);
-      DEBUG(" (%.2f .. %.2f -> %.2f)", InitialDelay, PreviousDelay, Delay);
+      std::cerr << "\n " << ((CacheLineSize * 2352) / 1024) << " kB / "
+                << CacheLineSize << " sectors";
+      DEBUG << " (" << std::setprecision(2) << InitialDelay << " .. "
+            << std::setprecision(2) << PreviousDelay << " -> "
+            << std::setprecision(2) << Delay << ")";
 
       if ((i > NB_IGNORE_MEASURES) && (CacheLineSize > MaxCacheLineSize))
       {
@@ -897,7 +886,7 @@ int TestCacheLineSize_Straight(sReadCommand &ReadCommand, long int TargetSector,
     }
     else
     {
-      printf("\n test aborted.");
+      std::cerr << "\n test aborted.";
     }
   }
   return MaxCacheLineSize;
@@ -928,8 +917,9 @@ int TestCacheLineSize_Wrap(sReadCommand &ReadCommand, long int TargetSector,
   int MaxCacheLineSize = 0;
   double InitialDelay, PreviousInitDelay;
 
-  DEBUG("\ninfo: %d test(s), c/nc ratio: %d, burst: %d, max: %d", NbMeasures,
-        CachedNonCachedSpeedFactor, NbBurstReadSectors, MaxCacheSectors);
+  DEBUG << "\ninfo: " << NbMeasures
+        << " test(s), c/nc ratio: " << CachedNonCachedSpeedFactor
+        << ", burst: " << NbBurstReadSectors << ", max: " << MaxCacheSectors;
   for (i = 0; i < NbMeasures; i++)
   {
     ClearCache();
@@ -938,10 +928,10 @@ int TestCacheLineSize_Wrap(sReadCommand &ReadCommand, long int TargetSector,
     // with a number of sectors following this one.
     auto result = ReadCommand.pFunc(TargetSector, NbBurstReadSectors, false);
     InitialDelay = result.Duration;
-    SUPERDEBUG("\n init %d: %f", TargetSector, InitialDelay);
+    SUPERDEBUG << "\n init " << TargetSector << ": " << InitialDelay;
     result = ReadCommand.pFunc(TargetSector, NbBurstReadSectors, false);
     PreviousInitDelay = result.Duration;
-    SUPERDEBUG("\n %d: %f", TargetSector, PreviousInitDelay);
+    SUPERDEBUG << "\n " << TargetSector << ": " << PreviousInitDelay;
 
     // read 1 sector forward and the initial sector. If the original sector
     // takes more than [CachedNonCachedSpeedFactor] times the delay taken by
@@ -953,11 +943,12 @@ int TestCacheLineSize_Wrap(sReadCommand &ReadCommand, long int TargetSector,
       result = ReadCommand.pFunc(TargetSector + TargetSectorOffset,
                                  NbBurstReadSectors, false);
       Delay = result.Duration;
-      SUPERDEBUG("\n %d: %f", TargetSector + TargetSectorOffset, Delay);
+      SUPERDEBUG << "\n " << (TargetSector + TargetSectorOffset) << ": "
+                 << Delay;
 
       result = ReadCommand.pFunc(TargetSector, NbBurstReadSectors, false);
       Delay2 = result.Duration;
-      SUPERDEBUG("\n %d: %f", TargetSector, Delay2);
+      SUPERDEBUG << "\n " << TargetSector << ": " << Delay2;
 
       if (Delay2 >= (CachedNonCachedSpeedFactor * PreviousInitDelay))
       {
@@ -976,17 +967,18 @@ int TestCacheLineSize_Wrap(sReadCommand &ReadCommand, long int TargetSector,
       if (TargetSectorOffset <= 1)
       {
         CachedNonCachedSpeedFactor++;
-        DEBUG("\ninfo: increasing c/nc ratio to %d",
-              CachedNonCachedSpeedFactor);
+        DEBUG << "\ninfo: increasing c/nc ratio to "
+              << CachedNonCachedSpeedFactor;
         i--;
       }
       else
       {
         CacheLineSize = TargetSectorOffset;
-        printf(CACHELINESIZE2, (int)((CacheLineSize * 2352) / 1024),
-               CacheLineSize);
-        DEBUG(" (%.2f .. %.2f -> %.2f)", InitialDelay, PreviousInitDelay,
-              Delay2);
+        std::cerr << "\n " << ((CacheLineSize * 2352) / 1024) << " kB / "
+                  << CacheLineSize << " sectors";
+        DEBUG << " (" << std::setprecision(2) << InitialDelay << " .. "
+              << std::setprecision(2) << PreviousInitDelay << " -> "
+              << std::setprecision(2) << Delay << ")";
 
         if ((i > NB_IGNORE_MEASURES) && (CacheLineSize > MaxCacheLineSize))
         {
@@ -996,7 +988,7 @@ int TestCacheLineSize_Wrap(sReadCommand &ReadCommand, long int TargetSector,
     }
     else
     {
-      printf("\n no cache detected");
+      std::cerr << "\n no cache detected";
     }
   }
   return MaxCacheLineSize;
@@ -1043,7 +1035,8 @@ int TestCacheLineSize_Stat(sReadCommand &ReadCommand, long int TargetSector,
 
   // find max time
   Maxdelay = *(std::max_element(std::begin(Measures), std::end(Measures)));
-  DEBUG("\ninitial: %.2f ms, max: %.2f ms", Measures[0], Maxdelay);
+  DEBUG << "\ninitial: " << std::setprecision(2) << Measures[0]
+        << " ms, max: " << std::setprecision(2) << Maxdelay << " ms";
 
   // find all values above 90% of max
   Threshold = Maxdelay * ThresholdRatioMethod2;
@@ -1053,14 +1046,15 @@ int TestCacheLineSize_Stat(sReadCommand &ReadCommand, long int TargetSector,
     if (Measures[i] > Threshold)
       PeakMeasuresIndexes[NbPeakMeasures++] = i;
   }
-  DEBUG("\nmeas: %d/%d above %.2f ms (%.2f)", NbPeakMeasures, NbMeasures,
-        Threshold, ThresholdRatioMethod2);
+  DEBUG << "\nmeas: " << NbPeakMeasures << "/" << NbMeasures << " above "
+        << std::setprecision(2) << Threshold << " ms (" << ThresholdRatioMethod2
+        << ")";
 
   // calculate stats on differences and keep max
   for (i = 1; i < NbPeakMeasures; i++)
   {
     CurrentDelta = PeakMeasuresIndexes[i] - PeakMeasuresIndexes[i - 1];
-    SUPERDEBUG("\ndelta = %d", CurrentDelta);
+    SUPERDEBUG << "\ndelta = " << CurrentDelta;
 
     for (j = 0; j < NbPeakMeasures; j++)
     {
@@ -1103,22 +1097,21 @@ int TestCacheLineSize_Stat(sReadCommand &ReadCommand, long int TargetSector,
     }
   }
 
-  printf("\nsizes: ");
+  std::cerr << "\nsizes: ";
   for (i = 0; DeltaArray[i].delta != 0; i++)
   {
     if (i % 5 == 0)
-      printf("\n");
-    printf(" %d (%d%%, div=%d)", DeltaArray[i].delta,
-           (int)(100 * DeltaArray[i].frequency / NbPeakMeasures),
-           DeltaArray[i].divider);
+      std::cerr << '\n';
+    std::cerr << " " << DeltaArray[i].delta << " ("
+              << (100 * DeltaArray[i].frequency / NbPeakMeasures)
+              << "%, div=" << DeltaArray[i].divider << ")";
   }
 
-  printf("\nfmax = %d (%d%%) : %d kB, %d sectors",
-         DeltaArray[MostFrequentDeltaIndex].frequency,
-         (int)(100 * DeltaArray[MostFrequentDeltaIndex].frequency /
-               NbPeakMeasures),
-         (int)((DeltaArray[MostFrequentDeltaIndex].delta * 2352) / 1024),
-         DeltaArray[MostFrequentDeltaIndex].delta);
+  std::cerr
+      << "\nfmax = " << DeltaArray[MostFrequentDeltaIndex].frequency << " ("
+      << (100 * DeltaArray[MostFrequentDeltaIndex].frequency / NbPeakMeasures)
+      << "%) : " << ((DeltaArray[MostFrequentDeltaIndex].delta * 2352) / 1024)
+      << " kB, " << DeltaArray[MostFrequentDeltaIndex].delta << " sectors";
   return (MostFrequentDeltaIndex);
 }
 
@@ -1132,7 +1125,7 @@ int TestCacheLineSizeWrapper(long int TargetSector, int NbMeasures,
   {
     if (cmd.Supported)
     {
-      DEBUG("\ninfo: using command %s", cmd.Name);
+      DEBUG << "\ninfo: using command " << cmd.Name;
 
       switch (method)
       {
@@ -1147,7 +1140,7 @@ int TestCacheLineSizeWrapper(long int TargetSector, int NbMeasures,
             TestCacheLineSize_Stat(cmd, TargetSector, NbMeasures, BurstSize);
         break;
       default:
-        printf("\nError: invalid method !!\n");
+        std::cerr << "\nError: invalid method !!\n";
       }
       break;
     }
@@ -1174,10 +1167,10 @@ int TestCacheLineNumber(sReadCommand &ReadCommand, long int TargetSector,
   double PreviousDelay;
   long int LocalTargetSector = TargetSector;
 
-  DEBUG("\ninfo: using c/nc ratio : %d", CachedNonCachedSpeedFactor);
+  DEBUG << "\ninfo: using c/nc ratio : " << CachedNonCachedSpeedFactor;
   if (!DebugMode)
   {
-    printf("\n");
+    std::cerr << "\n";
   }
 
   for (i = 0; i < NbMeasures; i++)
@@ -1189,7 +1182,8 @@ int TestCacheLineNumber(sReadCommand &ReadCommand, long int TargetSector,
     // with a number of sectors following this one.
     auto result = ReadCommand.pFunc(LocalTargetSector, 1, false);
     PreviousDelay = result.Duration;
-    SUPERDEBUG("\n first read at %d: %.2f", LocalTargetSector, PreviousDelay);
+    SUPERDEBUG << "\n first read at " << LocalTargetSector << ": "
+               << std::setprecision(2) << PreviousDelay;
 
     for (j = 1; j < MAX_CACHE_LINES; j++)
     {
@@ -1199,11 +1193,14 @@ int TestCacheLineNumber(sReadCommand &ReadCommand, long int TargetSector,
       // read 1 sector next to the original one
       result = ReadCommand.pFunc(LocalTargetSector + 2 * j, 1, false);
       Delay = result.Duration;
-      SUPERDEBUG("\n read at %d: %.2f", LocalTargetSector + 2 * j, Delay);
+      SUPERDEBUG << "\n read at " << (LocalTargetSector + 2 * j) << ": "
+                 << std::setprecision(2) << Delay;
 
       if (DebugMode || SuperDebugMode)
       {
-        printf("\n%.2f / %.2f -> ", PreviousDelay, Delay);
+        std::cerr << "\n"
+                  << std::setprecision(2) << PreviousDelay << " / "
+                  << std::setprecision(2) << Delay << " -> ";
       }
       if (Delay <= (PreviousDelay / CachedNonCachedSpeedFactor))
       {
@@ -1214,7 +1211,7 @@ int TestCacheLineNumber(sReadCommand &ReadCommand, long int TargetSector,
         break;
       }
     }
-    printf(" %d", NbCacheLines);
+    std::cerr << " " << NbCacheLines;
     LocalTargetSector += 2000;
   }
   return NbCacheLines;
@@ -1224,7 +1221,7 @@ int TestCacheLineNumber(sReadCommand &ReadCommand, long int TargetSector,
 int TestCacheLineNumberWrapper(long int TargetSector, int NbMeasures)
 {
   auto &&cmd = GetSupportedCommand();
-  DEBUG("\ninfo: using command %s", cmd.Name);
+  std::cerr << "\ninfo: using command " << cmd.Name;
   return TestCacheLineNumber(cmd, TargetSector, NbMeasures);
 }
 
@@ -1242,7 +1239,7 @@ int TestPlextorFUAInvalidationSize(sReadCommand &ReadCommand,
   int InvalidatedSize = 0;
   double InitialDelay;
 
-  DEBUG("\ninfo: using c/nc ratio : %d", CachedNonCachedSpeedFactor);
+  DEBUG << "\ninfo: using c/nc ratio : " << CachedNonCachedSpeedFactor;
 
   for (i = 0; i < NbMeasures; i++)
   {
@@ -1255,8 +1252,9 @@ int TestPlextorFUAInvalidationSize(sReadCommand &ReadCommand,
       // filled with a number of sectors following this one.
       auto result = ReadCommand.pFunc(TargetSector, 1, false);
       InitialDelay = result.Duration;
-      SUPERDEBUG("\n(%d) init = %.2f, thr = %.2f", i, InitialDelay,
-                 (double)(InitialDelay / CachedNonCachedSpeedFactor));
+      SUPERDEBUG << "\n(" << i << ") init = " << std::setprecision(2)
+                 << InitialDelay << ", thr = " << std::setprecision(2)
+                 << (InitialDelay / CachedNonCachedSpeedFactor);
 
       // invalidate cache with Plextor FUA command
       PlextorFUAFlush(TargetSector);
@@ -1273,7 +1271,8 @@ int TestPlextorFUAInvalidationSize(sReadCommand &ReadCommand,
 
       ReadCommand.pFunc(TargetSector + TargetSectorOffset, 1, false);
       Delay = result.Duration;
-      SUPERDEBUG(" (%d) %d: %.2f", i, TargetSector + TargetSectorOffset, Delay);
+      SUPERDEBUG << " (" << i << ") " << (TargetSector + TargetSectorOffset)
+                 << ": " << std::setprecision(2) << Delay;
 
       if (Delay <= (InitialDelay / CachedNonCachedSpeedFactor))
       {
@@ -1289,7 +1288,7 @@ int TestPlextorFUAInvalidationSize(sReadCommand &ReadCommand,
 int TestPlextorFUAInvalidationSizeWrapper(long int TargetSector, int NbMeasures)
 {
   auto &&cmd = GetSupportedCommand();
-  DEBUG("\ninfo: using command %s", cmd.Name);
+  DEBUG << "\ninfo: using command " << cmd.Name;
   return TestPlextorFUAInvalidationSize(cmd, TargetSector, NbMeasures);
 }
 
@@ -1302,7 +1301,7 @@ bool TestRCDBitSupport()
   }
   else
   {
-    printf("not supported");
+    std::cerr << "not supported";
   }
   return (retval);
 }
@@ -1332,12 +1331,12 @@ int TestCacheLineSizePrefetch(long int TargetSector)
   }
   if ((result.ScsiStatus == ScsiStatus::GOOD) && (NbSectors > 1))
   {
-    printf("\n-> cache size = %d kB, %d sectors",
-           (int)((NbSectors - 1) * 2352 / 1024), NbSectors - 1);
+    std::cerr << "\n-> cache size = " << ((NbSectors - 1) * 2352 / 1024)
+              << " kB, " << (NbSectors - 1) << " sectors";
   }
   else
   {
-    printf("\nError: this method does not seem to work on this drive");
+    std::cerr << "\nError: this method does not seem to work on this drive";
   }
   return NbSectors - 1;
 }
@@ -1370,34 +1369,35 @@ commands
 
 void PrintUsage()
 {
-  printf("\nUsage:   cachex <commands> <options> <drive letter>\n");
-  printf("\nCommands:  -i     : show drive info\n");
-  printf("           -c     : test drive cache\n");
-  //    printf("           -c2    : test drive cache (method 2)\n");
-  //    printf("           -c3    : test drive cache (method 3)\n");
-  printf("           -p     : test plextor FUA command\n");
-  printf("           -k     : test cache disabling\n");
-  printf("           -w     : test cache line numbers\n");
-  printf("\nOptions:   -d     : show debug info\n");
-  printf("           -l xx  : spin drive for xx seconds before starting to "
-         "measure\n");
-  //    printf("           -b xx  : use burst reads of size xx\n");
-  //    printf("           -t xx  : threshold at xx%% for cache tests\n");
-  printf("           -x xx  : use cached/non cached ratio xx\n");
-  printf("           -r xx  : use read command xx (one of ");
+  std::cerr << "\nUsage:   cachex <commands> <options> <drive letter>\n";
+  std::cerr << "\nCommands:  -i     : show drive info\n";
+  std::cerr << "           -c     : test drive cache\n";
+  //    std::cerr <<"           -c2    : test drive cache (method 2)\n";
+  //    std::cerr <<"           -c3    : test drive cache (method 3)\n";
+  std::cerr << "           -p     : test plextor FUA command\n";
+  std::cerr << "           -k     : test cache disabling\n";
+  std::cerr << "           -w     : test cache line numbers\n";
+  std::cerr << "\nOptions:   -d     : show debug info\n";
+  std::cerr
+      << "           -l xx  : spin drive for xx seconds before starting to "
+         "measure\n";
+  //    std::cerr <<"           -b xx  : use burst reads of size xx\n";
+  //    std::cerr <<"           -t xx  : threshold at xx% for cache tests\n";
+  std::cerr << "           -x xx  : use cached/non cached ratio xx\n";
+  std::cerr << "           -r xx  : use read command xx (one of ";
   for (auto &&cmd : Commands)
   {
-    printf("%s", cmd.Name);
+    std::cerr << cmd.Name;
     if (&cmd != &Commands.back())
     {
-      printf(", ");
+      std::cerr << ", ";
     }
   }
-  printf(")\n");
-  printf("           -s xx  : set read speed to xx (0=max)\n");
-  printf("           -m xx  : look for cache size up to xx sectors\n");
-  //    printf("           -y xx  : use xx sectors for cache test method 2\n");
-  printf("           -n xx  : perform xx tests\n");
+  std::cerr << ")\n";
+  std::cerr << "           -s xx  : set read speed to xx (0=max)\n";
+  std::cerr << "           -m xx  : look for cache size up to xx sectors\n";
+  //    std::cerr << "           -y xx  : use xx sectors for cache test method 2\n";
+  std::cerr << "           -n xx  : perform xx tests\n";
 }
 
 } // namespace
@@ -1425,8 +1425,9 @@ int main(int argc, char **argv)
   const char *UserReadCommand = nullptr;
 
   // --------------- setup ---------------------------
-  printf("\nCacheExplorer 0.10 - https://github.com/xavery/cachex, based on");
-  printf("\nCacheExplorer 0.9 - spath@cdfreaks.com\n");
+  std::cerr
+      << "\nCacheExplorer 0.10 - https://github.com/xavery/cachex, based on";
+  std::cerr << "\nCacheExplorer 0.9 - spath@cdfreaks.com\n";
 
   // ------------ command line parsing --------------
   if (argc < 2)
@@ -1525,7 +1526,7 @@ int main(int argc, char **argv)
 
   if (!DrivePath)
   {
-    printf("\nError: no drive selected\n");
+    std::cerr << "\nError: no drive selected\n";
     PrintUsage();
     exit(-1);
   }
@@ -1540,13 +1541,13 @@ int main(int argc, char **argv)
   {
     return (-1);
   }
-  printf("\nDrive on %s is ", DrivePath);
+  std::cerr << "\nDrive on " << DrivePath << " is ";
   if (!PrintDriveInfo())
   {
-    printf("\nError: cannot read drive info");
+    std::cerr << "\nError: cannot read drive info";
     return (-1);
   }
-  printf("\n");
+  std::cerr << '\n';
 
   //-------------------------------------------------------------------
 
@@ -1558,7 +1559,7 @@ int main(int argc, char **argv)
     ShowCacheValues();
     if (!TestSupportedReadCommands())
     {
-      printf("\nError: no supported commands found\n");
+      std::cerr << "\nError: no supported commands found\n";
       exit(-1);
     }
   }
@@ -1570,7 +1571,8 @@ int main(int argc, char **argv)
 
     if (chosen_cmd == std::end(Commands))
     {
-      printf("\nError: command %s is not recognized\n", UserReadCommand);
+      std::cerr << "\nError: command " << UserReadCommand
+                << " is not recognized\n";
       exit(-1);
     }
 
@@ -1580,7 +1582,7 @@ int main(int argc, char **argv)
     }
     else
     {
-      printf("\nError: command %s not supported\n", UserReadCommand);
+      std::cerr << "\nError: command " << UserReadCommand << " not supported\n";
       exit(-1);
     }
   }
@@ -1592,14 +1594,14 @@ int main(int argc, char **argv)
   {
     if (DebugMode)
     {
-      printf("\n[+] Changing read speed to ");
+      std::cerr << "\n[+] Changing read speed to ";
       if (MaxReadSpeed == 0)
       {
-        printf("max\n");
+        std::cerr << "max\n";
       }
       else
       {
-        printf("%dx\n", MaxReadSpeed);
+        std::cerr << MaxReadSpeed << "x\n";
       }
       SetDriveSpeed(MaxReadSpeed, 0);
     }
@@ -1619,24 +1621,18 @@ int main(int argc, char **argv)
 
     if (TestPlextorFUACommand())
     {
-      printf("\n[+] Plextor flush tests: ");
-      printf("%d/%d", TestPlextorFUACommandWorksWrapper(15000, Nbtests),
-             Nbtests);
+      std::cerr << "\n[+] Plextor flush tests: ";
+      std::cerr << TestPlextorFUACommandWorksWrapper(15000, Nbtests) << '/'
+                << Nbtests;
 
       if (PFUAInvalidationSizeTest)
       {
         // 4) Find the size of data invalidated  by Plextor FUA command
-        printf(TESTINGPLEXFUA2);
+        std::cerr << "\n[+] Testing invalidation of Plextor flush command: ";
         InvalidatedSectors = TestPlextorFUAInvalidationSizeWrapper(15000, 1);
-        DEBUG("%s", "\nresult: ");
-        if (InvalidatedSectors > 0)
-        {
-          printf("ok (%d)", InvalidatedSectors);
-        }
-        else
-        {
-          printf("not working (%d)", InvalidatedSectors);
-        }
+        std::cerr << "\nresult: "
+                  << ((InvalidatedSectors > 0) ? "ok" : "not working") << " ("
+                  << InvalidatedSectors << ')';
       }
     }
     platform::set_normal_priority();
@@ -1650,8 +1646,7 @@ int main(int argc, char **argv)
     // SIZE : method 1
     RunCacheTest(SpinDriveFlag, NbSecsDriveSpin, [&]() {
       Nbtests = (Nbtests == 0) ? 10 : Nbtests;
-
-      printf(CACHELINESIZETEST2);
+      std::cerr << "\n[+] Testing cache line size:";
       CacheLineSizeSectors = TestCacheLineSizeWrapper(15000, Nbtests, 0, 1);
     });
   }
@@ -1661,7 +1656,7 @@ int main(int argc, char **argv)
     // SIZE : method 2
     RunCacheTest(SpinDriveFlag, NbSecsDriveSpin, [&]() {
       Nbtests = (Nbtests == 0) ? 20 : Nbtests;
-      printf(CACHELINESIZETEST, 2);
+      std::cerr << "\n[+] Testing cache line size (method 2):";
       CacheLineSizeSectors = TestCacheLineSizeWrapper(15000, Nbtests, 0, 2);
     });
   }
@@ -1671,7 +1666,7 @@ int main(int argc, char **argv)
     // NUMBER
     RunCacheTest(SpinDriveFlag, NbSecsDriveSpin, [&]() {
       Nbtests = (Nbtests == 0) ? 5 : Nbtests;
-      printf(CACHELINESIZETEST, 2);
+      std::cerr << "\n[+] Testing cache line size (method 2):";
       CacheLineSizeSectors = TestCacheLineSizeWrapper(15000, Nbtests, 0, 2);
     });
   }
@@ -1680,7 +1675,7 @@ int main(int argc, char **argv)
   {
     // SIZE : method 3 (STATS)
     RunCacheTest(SpinDriveFlag, NbSecsDriveSpin, [&]() {
-      printf(CACHELINESIZETEST, 3);
+      std::cerr << "\n[+] Testing cache line size (method 3):";
       TestCacheLineSizeWrapper(15000, NbSectorsMethod2, NbBurstReadSectors, 3);
     });
   }
@@ -1688,29 +1683,29 @@ int main(int argc, char **argv)
   if (CacheMethod4)
   {
     // SIZE : method 4 (PREFETCH)
-    printf(CACHELINESIZETEST, 4);
+    std::cerr << "\n[+] Testing cache line size (method 4):";
     TestCacheLineSizePrefetch(10000);
   }
 
   if (TestRCDBit)
   {
-    printf("\n[+] Testing cache disabling: ");
+    std::cerr << "\n[+] Testing cache disabling: ";
 
     Nbtests = (Nbtests == 0) ? 3 : Nbtests;
     if (TestRCDBitSupport())
     {
       if (TestRCDBitWorksWrapper(15000, Nbtests) > 0)
       {
-        printf("ok");
+        std::cerr << "ok";
       }
       else
       {
-        printf("not supported");
+        std::cerr << "not supported";
       }
     }
   }
 
-  printf("\n");
+  std::cerr << '\n';
   platform::close_handle(hVolume);
   return 0;
 }
