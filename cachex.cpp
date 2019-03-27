@@ -118,18 +118,21 @@ struct platform
 #define CACHELINESIZE2 "\n%d (%.2f / %.2f -> %.2f)"
 #endif
 
+namespace
+{
+
 // global variables
-static int NbBurstReadSectors = 1;
-static double Delay = 0, Delay2 = 0, InitDelay = 0;
-static double AverageDelay = 0;
-static bool ReadCommandsDetected = false;
-static platform::device_handle hVolume;
-static bool DebugMode = false;
-static bool SuperDebugMode = false;
-static double ThresholdRatioMethod2 = 0.9;
-static int CachedNonCachedSpeedFactor = 4;
-static int MaxCacheSectors = 1000;
-static int PeakMeasuresIndexes[NBPEAKMEASURES];
+int NbBurstReadSectors = 1;
+double Delay = 0, Delay2 = 0, InitDelay = 0;
+double AverageDelay = 0;
+bool ReadCommandsDetected = false;
+platform::device_handle hVolume;
+bool DebugMode = false;
+bool SuperDebugMode = false;
+double ThresholdRatioMethod2 = 0.9;
+int CachedNonCachedSpeedFactor = 4;
+int MaxCacheSectors = 1000;
+int PeakMeasuresIndexes[NBPEAKMEASURES];
 
 typedef struct
 {
@@ -137,7 +140,7 @@ typedef struct
   int frequency;
   short divider;
 } sDeltaArray;
-static sDeltaArray DeltaArray[NBDELTA];
+sDeltaArray DeltaArray[NBDELTA];
 
 template <std::size_t N> using bytearray = std::array<std::uint8_t, N>;
 
@@ -347,24 +350,23 @@ bytearray<12> SetCDSpeed(unsigned char ReadSpeedX, unsigned char WriteSpeedX)
 } // namespace Command
 
 template <std::size_t CDBLength>
-static void ExecCommand(CommandResult &rv,
-                        const std::array<std::uint8_t, CDBLength> &cdb)
+void ExecCommand(CommandResult &rv,
+                 const std::array<std::uint8_t, CDBLength> &cdb)
 {
   platform::exec_command(hVolume, rv, cdb);
 }
 
 template <std::size_t CDBLength>
-static void ExecCommand(CommandResult &rv,
-                        const std::array<std::uint8_t, CDBLength> &cdb,
-                        const std::vector<std::uint8_t> &data)
+void ExecCommand(CommandResult &rv,
+                 const std::array<std::uint8_t, CDBLength> &cdb,
+                 const std::vector<std::uint8_t> &data)
 {
   platform::send_data(hVolume, rv, cdb, data);
 }
 
 template <std::size_t CDBLength>
-static CommandResult
-ExecSectorCommand(unsigned int NbSectors,
-                  const std::array<std::uint8_t, CDBLength> &cdb)
+CommandResult ExecSectorCommand(unsigned int NbSectors,
+                                const std::array<std::uint8_t, CDBLength> &cdb)
 {
   CommandResult rv(2448 * NbSectors);
   ExecCommand(rv, cdb);
@@ -372,9 +374,8 @@ ExecSectorCommand(unsigned int NbSectors,
 }
 
 template <std::size_t CDBLength>
-static CommandResult
-ExecBytesCommand(unsigned int NbBytes,
-                 const std::array<std::uint8_t, CDBLength> &cdb)
+CommandResult ExecBytesCommand(unsigned int NbBytes,
+                               const std::array<std::uint8_t, CDBLength> &cdb)
 {
   CommandResult rv(NbBytes);
   ExecCommand(rv, cdb);
@@ -382,62 +383,60 @@ ExecBytesCommand(unsigned int NbBytes,
 }
 
 template <std::size_t CDBLength>
-static CommandResult
-ExecBytesCommand(unsigned int NbBytes,
-                 const std::array<std::uint8_t, CDBLength> &cdb,
-                 const std::vector<std::uint8_t> &data)
+CommandResult ExecBytesCommand(unsigned int NbBytes,
+                               const std::array<std::uint8_t, CDBLength> &cdb,
+                               const std::vector<std::uint8_t> &data)
 {
   CommandResult rv(NbBytes);
   ExecCommand(rv, cdb, data);
   return rv;
 }
 
-static CommandResult Read_A8h(long int TargetSector, int NbSectors, bool FUAbit)
+CommandResult Read_A8h(long int TargetSector, int NbSectors, bool FUAbit)
 {
   return ExecSectorCommand(NbSectors,
                            Command::Read_A8h(TargetSector, NbSectors, FUAbit));
 }
 
-static CommandResult Read_28h(long int TargetSector, int NbSectors, bool FUAbit)
+CommandResult Read_28h(long int TargetSector, int NbSectors, bool FUAbit)
 {
   return ExecSectorCommand(NbSectors,
                            Command::Read_28h(TargetSector, NbSectors, FUAbit));
 }
 
-static CommandResult Read_28h_12(long int TargetSector, int NbSectors,
-                                 bool FUAbit)
+CommandResult Read_28h_12(long int TargetSector, int NbSectors, bool FUAbit)
 {
   return ExecSectorCommand(
       NbSectors, Command::Read_28h_12(TargetSector, NbSectors, FUAbit));
 }
 
-static CommandResult Read_BEh(long int TargetSector, int NbSectors, bool)
+CommandResult Read_BEh(long int TargetSector, int NbSectors, bool)
 {
   return ExecSectorCommand(NbSectors,
                            Command::Read_BEh(TargetSector, NbSectors));
 }
 
-static CommandResult Read_D4h(long int TargetSector, int NbSectors, bool FUAbit)
+CommandResult Read_D4h(long int TargetSector, int NbSectors, bool FUAbit)
 {
   return ExecSectorCommand(NbSectors,
                            Command::Read_D4h(TargetSector, NbSectors, FUAbit));
 }
 
-static CommandResult Read_D5h(long int TargetSector, int NbSectors, bool FUAbit)
+CommandResult Read_D5h(long int TargetSector, int NbSectors, bool FUAbit)
 {
   return ExecSectorCommand(NbSectors,
                            Command::Read_D5h(TargetSector, NbSectors, FUAbit));
 }
 
-static CommandResult Read_D8h(long int TargetSector, int NbSectors, bool FUAbit)
+CommandResult Read_D8h(long int TargetSector, int NbSectors, bool FUAbit)
 {
   return ExecSectorCommand(NbSectors,
                            Command::Read_D8h(TargetSector, NbSectors, FUAbit));
 }
 
 // drive characteristics
-static int CacheLineSizeSectors = 0;
-static int CacheLineNumbers = 0;
+int CacheLineSizeSectors = 0;
+int CacheLineNumbers = 0;
 
 typedef struct
 {
@@ -448,7 +447,7 @@ typedef struct
   bool operator==(const char *name) const { return strcmp(Name, name) == 0; }
 } sReadCommand;
 
-static sReadCommand Commands[] = {
+sReadCommand Commands[] = {
     {"BEh", &Read_BEh, false, false}, {"A8h", &Read_A8h, false, true},
     {"28h", &Read_28h, false, true},  {"28h_12", &Read_28h_12, false, true},
     {"D4h", &Read_D4h, false, true},  {"D5h", &Read_D5h, false, true},
@@ -456,36 +455,36 @@ static sReadCommand Commands[] = {
 
 #define NB_READ_COMMANDS (sizeof(Commands) / sizeof(*Commands))
 
-static CommandResult PlextorFUAFlush(long int TargetSector)
+CommandResult PlextorFUAFlush(long int TargetSector)
 {
   return ExecSectorCommand(0, Command::PlextorFUAFlush(TargetSector));
 }
 
-static CommandResult RequestSense()
+CommandResult RequestSense()
 {
   const std::uint8_t AllocationLength = 18;
   return ExecBytesCommand(AllocationLength,
                           Command::RequestSense(AllocationLength));
 }
 
-static CommandResult ModeSense(unsigned char PageCode,
-                               unsigned char SubPageCode, int size)
+CommandResult ModeSense(unsigned char PageCode, unsigned char SubPageCode,
+                        int size)
 {
   return ExecBytesCommand(size,
                           Command::ModeSense(PageCode, SubPageCode, size));
 }
 
-static CommandResult ModeSelect(const std::vector<std::uint8_t> &data)
+CommandResult ModeSelect(const std::vector<std::uint8_t> &data)
 {
   return ExecBytesCommand(data.size(), Command::ModeSelect(data.size()), data);
 }
 
-static CommandResult Prefetch(long int TargetSector, unsigned int NbSectors)
+CommandResult Prefetch(long int TargetSector, unsigned int NbSectors)
 {
   return ExecBytesCommand(18, Command::Prefetch(TargetSector, NbSectors));
 }
 
-static void PrintIDString(unsigned char *dataChars, int dataLength)
+void PrintIDString(unsigned char *dataChars, int dataLength)
 {
   if (dataChars)
   {
@@ -503,7 +502,7 @@ static void PrintIDString(unsigned char *dataChars, int dataLength)
   }
 }
 
-static bool PrintDriveInfo()
+bool PrintDriveInfo()
 {
   const std::uint8_t AllocationLength = 36;
   auto result =
@@ -521,7 +520,7 @@ static bool PrintDriveInfo()
 // fills the cache by reading backwards several areas at the beginning of the
 // disc
 //
-static bool ClearCache()
+bool ClearCache()
 {
   int i, j;
   bool retval = false;
@@ -543,7 +542,7 @@ static bool ClearCache()
   return retval;
 }
 
-static bool SpinDrive(unsigned int Seconds)
+bool SpinDrive(unsigned int Seconds)
 {
   bool retval = false;
   int i = 0, j = 0;
@@ -569,13 +568,12 @@ static bool SpinDrive(unsigned int Seconds)
   return retval;
 }
 
-static CommandResult SetDriveSpeed(unsigned char ReadSpeedX,
-                                   unsigned char WriteSpeedX)
+CommandResult SetDriveSpeed(unsigned char ReadSpeedX, unsigned char WriteSpeedX)
 {
   return ExecBytesCommand(18, Command::SetCDSpeed(ReadSpeedX, WriteSpeedX));
 }
 
-static void ShowCacheValues()
+void ShowCacheValues()
 {
   auto result = ModeSense(CD_DVD_CAPABILITIES_PAGE, 0, 32);
   if (result)
@@ -603,7 +601,7 @@ static void ShowCacheValues()
   }
 }
 
-static bool SetCacheRCDBit(bool RCDBitValue)
+bool SetCacheRCDBit(bool RCDBitValue)
 {
   bool retval = false;
 
@@ -643,7 +641,7 @@ static bool SetCacheRCDBit(bool RCDBitValue)
 // test and display which read commands are supported by the current drive
 // and if any of these commands supports the FUA bit
 //------------------------------------------------------------------------------
-static void TestSupportedReadCommands()
+void TestSupportedReadCommands()
 {
   printf(SUPPORTEDREADCOMMANDS);
   for (int i = 0; i < NB_READ_COMMANDS; i++)
@@ -677,7 +675,7 @@ static void TestSupportedReadCommands()
 // TestPlextorFUACommand
 //
 // test if Plextor's flushing command is supported
-static bool TestPlextorFUACommand()
+bool TestPlextorFUACommand()
 {
   printf(TESTINGPLEXFUA);
   auto result = PlextorFUAFlush(100000);
@@ -690,8 +688,8 @@ static bool TestPlextorFUACommand()
 // TestPlextorFUACommandWorks
 //
 // test if Plextor's flushing command actually works
-static int TestPlextorFUACommandWorks(int ReadCommand, long int TargetSector,
-                                      int NbTests)
+int TestPlextorFUACommandWorks(int ReadCommand, long int TargetSector,
+                               int NbTests)
 {
   int InvalidationSuccess = 0;
   double InitDelay2 = 0;
@@ -733,7 +731,7 @@ static int TestPlextorFUACommandWorks(int ReadCommand, long int TargetSector,
 }
 
 // wrapper for TestPlextorFUACommandWorks
-static int TestPlextorFUACommandWorksWrapper(long int TargetSector, int NbTests)
+int TestPlextorFUACommandWorksWrapper(long int TargetSector, int NbTests)
 {
   int ValidReadCommand;
   int retval = 0;
@@ -763,8 +761,8 @@ static int TestPlextorFUACommandWorksWrapper(long int TargetSector, int NbTests)
 //
 // TimeMultipleReads
 //
-static void TimeMultipleReads(unsigned char ReadCommand, long int TargetSector,
-                              int NbReads, bool FUAbit)
+void TimeMultipleReads(unsigned char ReadCommand, long int TargetSector,
+                       int NbReads, bool FUAbit)
 {
   int i = 0;
 
@@ -783,7 +781,7 @@ static void TimeMultipleReads(unsigned char ReadCommand, long int TargetSector,
 // TestCacheSpeedImpact
 //
 // compare reading times with FUA bit (to disc) and without FUA (from cache)
-static void TestCacheSpeedImpact(long int TargetSector, int NbReads)
+void TestCacheSpeedImpact(long int TargetSector, int NbReads)
 {
   for (int i = 0; i < NB_READ_COMMANDS; i++)
   {
@@ -807,7 +805,7 @@ static void TestCacheSpeedImpact(long int TargetSector, int NbReads)
 // TestRCDBitWorks
 //
 // test if cache can be disabled via RCD bit
-static int TestRCDBitWorks(int ReadCommand, long int TargetSector, int NbTests)
+int TestRCDBitWorks(int ReadCommand, long int TargetSector, int NbTests)
 {
   int i;
   int InvalidationSuccess = 0;
@@ -863,7 +861,7 @@ static int TestRCDBitWorks(int ReadCommand, long int TargetSector, int NbTests)
 }
 
 // wrapper for TestRCDBit
-static int TestRCDBitWorksWrapper(long int TargetSector, int NbTests)
+int TestRCDBitWorksWrapper(long int TargetSector, int NbTests)
 {
   int ValidReadCommand;
   int retval = -1;
@@ -900,8 +898,8 @@ static int TestRCDBitWorksWrapper(long int TargetSector, int NbTests)
 // line size and not the cache line size itself.
 //
 //------------------------------------------------------------------------------
-static int TestCacheLineSize_Straight(unsigned char ReadCommand,
-                                      long int TargetSector, int NbMeasures)
+int TestCacheLineSize_Straight(unsigned char ReadCommand, long int TargetSector,
+                               int NbMeasures)
 {
   int i, TargetSectorOffset, CacheLineSize;
   int MaxCacheLineSize = 0;
@@ -980,8 +978,8 @@ static int TestCacheLineSize_Straight(unsigned char ReadCommand,
 // threshold value and not really the cache size.
 //
 //------------------------------------------------------------------------------
-static int TestCacheLineSize_Wrap(unsigned char ReadCommand,
-                                  long int TargetSector, int NbMeasures)
+int TestCacheLineSize_Wrap(unsigned char ReadCommand, long int TargetSector,
+                           int NbMeasures)
 {
   int i, TargetSectorOffset, CacheLineSize;
   int MaxCacheLineSize = 0;
@@ -1070,9 +1068,8 @@ static int TestCacheLineSize_Wrap(unsigned char ReadCommand,
 // finds cache line size with a single long burst read of NbMeasures * BurstSize
 // sectors, then try to find the cache size with statistical calculations
 //------------------------------------------------------------------------------
-static int TestCacheLineSize_Stat(unsigned char ReadCommand,
-                                  long int TargetSector, int NbMeasures,
-                                  int BurstSize)
+int TestCacheLineSize_Stat(unsigned char ReadCommand, long int TargetSector,
+                           int NbMeasures, int BurstSize)
 {
   int i, j;
   int NbPeakMeasures;
@@ -1191,8 +1188,8 @@ static int TestCacheLineSize_Stat(unsigned char ReadCommand,
 }
 
 // wrapper for TestCacheLineSize
-static int TestCacheLineSizeWrapper(long int TargetSector, int NbMeasures,
-                                    int BurstSize, short method)
+int TestCacheLineSizeWrapper(long int TargetSector, int NbMeasures,
+                             int BurstSize, short method)
 {
   int ValidReadCommand;
   int retval = -1;
@@ -1246,8 +1243,8 @@ static int TestCacheLineSizeWrapper(long int TargetSector, int NbMeasures,
 // To find out the number of cache lines, we read multiple M sectors at various
 // positions
 //------------------------------------------------------------------------------
-static int TestCacheLineNumber(unsigned char ReadCommand, long int TargetSector,
-                               int NbMeasures)
+int TestCacheLineNumber(unsigned char ReadCommand, long int TargetSector,
+                        int NbMeasures)
 {
   int i, j;
   int NbCacheLines = 1;
@@ -1301,7 +1298,7 @@ static int TestCacheLineNumber(unsigned char ReadCommand, long int TargetSector,
 }
 
 // wrapper for TestCacheLineNumber
-static int TestCacheLineNumberWrapper(long int TargetSector, int NbMeasures)
+int TestCacheLineNumberWrapper(long int TargetSector, int NbMeasures)
 {
   int ValidReadCommand;
   int retval = -1;
@@ -1333,8 +1330,8 @@ static int TestCacheLineNumberWrapper(long int TargetSector, int NbMeasures)
 //
 // find size of cache invalidated by Plextor FUA command
 //------------------------------------------------------------------------------
-static int TestPlextorFUAInvalidationSize(unsigned char ReadCommand,
-                                          long int TargetSector, int NbMeasures)
+int TestPlextorFUAInvalidationSize(unsigned char ReadCommand,
+                                   long int TargetSector, int NbMeasures)
 {
 #define CACHE_TEST_BLOCK 20
 
@@ -1386,8 +1383,7 @@ static int TestPlextorFUAInvalidationSize(unsigned char ReadCommand,
 }
 
 // wrapper for TestPlextorFUAInvalidationSize
-static int TestPlextorFUAInvalidationSizeWrapper(long int TargetSector,
-                                                 int NbMeasures)
+int TestPlextorFUAInvalidationSizeWrapper(long int TargetSector, int NbMeasures)
 {
   int ValidReadCommand;
   int retval = -1;
@@ -1414,7 +1410,7 @@ static int TestPlextorFUAInvalidationSizeWrapper(long int TargetSector,
   return retval;
 }
 
-static bool TestRCDBitSupport()
+bool TestRCDBitSupport()
 {
   bool retval = false;
   if (ModeSense(CACHING_MODE_PAGE, 0, 20))
@@ -1442,7 +1438,7 @@ static bool TestRCDBitSupport()
 //   status
 //
 //------------------------------------------------------------------------------
-static int TestCacheLineSizePrefetch(long int TargetSector)
+int TestCacheLineSizePrefetch(long int TargetSector)
 {
   int NbSectors = 1;
 
@@ -1477,7 +1473,7 @@ commands
 
 */
 
-static void PrintUsage()
+void PrintUsage()
 {
   printf("\nUsage:   cachex <commands> <options> <drive letter>\n");
   printf("\nCommands:  -i     : show drive info\n");
@@ -1508,6 +1504,8 @@ static void PrintUsage()
   //    printf("           -y xx  : use xx sectors for cache test method 2\n");
   printf("           -n xx  : perform xx tests\n");
 }
+
+} // namespace
 
 int main(int argc, char **argv)
 {
