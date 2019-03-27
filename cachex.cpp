@@ -401,10 +401,6 @@ CommandResult Read_D8h(long int TargetSector, int NbSectors, bool FUAbit)
                            Command::Read_D8h(TargetSector, NbSectors, FUAbit));
 }
 
-// drive characteristics
-int CacheLineSizeSectors = 0;
-int CacheLineNumbers = 0;
-
 struct sReadCommand
 {
   sReadCommand(const sReadCommand &) = delete;
@@ -1641,6 +1637,7 @@ int main(int argc, char **argv)
   //
   // 3) Explore cache structure
   //
+  int CacheLineSizeSectors;
   if (CacheMethod1)
   {
     // SIZE : method 1
