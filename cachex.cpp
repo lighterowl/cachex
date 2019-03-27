@@ -445,6 +445,7 @@ typedef struct
   CommandResult (*pFunc)(long int, int, bool);
   bool Supported;
   bool FUAbitSupported;
+  bool operator==(const char *name) const { return strcmp(Name, name) == 0; }
 } sReadCommand;
 
 static sReadCommand Commands[] = {
@@ -1667,33 +1668,30 @@ int main(int argc, char **argv)
 
   if (UserReadCommand != nullptr)
   {
-    ReadCommandsDetected = false;
-    for (j = 0; j < NB_READ_COMMANDS; j++)
-    {
-      // override commands detection by user selection
-      Commands[j].Supported = false;
-    }
+    auto chosen_cmd =
+        std::find(std::begin(Commands), std::end(Commands), UserReadCommand);
 
-    for (j = 0; j < NB_READ_COMMANDS; j++)
-    {
-      if (strcmp(UserReadCommand, Commands[j].Name) == 0)
-      {
-        if (Commands[j].pFunc(10000, 1, false))
-        {
-          Commands[j].Supported = true;
-          ReadCommandsDetected = true;
-          break;
-        }
-        else
-        {
-          printf("\nError: command %s not supported\n", UserReadCommand);
-          exit(-1);
-        }
-      }
-    }
-    if (j == NB_READ_COMMANDS)
+    if (chosen_cmd == std::end(Commands))
     {
       printf("\nError: command %s is not recognized\n", UserReadCommand);
+      exit(-1);
+    }
+
+    ReadCommandsDetected = false;
+    for (auto &&cmd : Commands)
+    {
+      // override commands detection by user selection
+      cmd.Supported = false;
+    }
+
+    if (chosen_cmd->pFunc(10000, 1, false))
+    {
+      chosen_cmd->Supported = true;
+      ReadCommandsDetected = true;
+    }
+    else
+    {
+      printf("\nError: command %s not supported\n", UserReadCommand);
       exit(-1);
     }
   }
