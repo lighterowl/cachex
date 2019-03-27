@@ -109,7 +109,7 @@ sptd_for_write(const std::vector<std::uint8_t> &data,
 
 struct platform_windows
 {
-  typedef HANDLE device_handle;
+  using device_handle = HANDLE;
 
   static std::uint32_t monotonic_clock() { return GetTickCount(); }
 
@@ -195,6 +195,6 @@ struct platform_windows
   }
 };
 
-typedef platform_windows platform;
+using platform = platform_windows;
 
 #endif

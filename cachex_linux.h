@@ -64,7 +64,7 @@ sg_io_hdr_t sg_io_for_write(const std::vector<std::uint8_t> &data,
 
 struct platform_linux
 {
-  typedef int device_handle;
+  using device_handle = int;
   static device_handle open_volume(const char *path)
   {
     return ::open(path, O_RDWR | O_NONBLOCK | O_EXCL);
@@ -99,6 +99,6 @@ struct platform_linux
   }
 };
 
-typedef platform_linux platform;
+using platform = platform_linux;
 
 #endif

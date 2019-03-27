@@ -14,7 +14,7 @@
 #error "This platform is not supported. Please implement the functions below."
 struct platform
 {
-  typedef int device_handle;
+  using device_handle = int;
   static device_handle open_volume(const char *) { return 0; }
   static bool handle_is_valid(device_handle) { return false; }
   static void close_handle(device_handle) {}
@@ -139,135 +139,124 @@ typedef struct
 } sDeltaArray;
 static sDeltaArray DeltaArray[NBDELTA];
 
+template <std::size_t N> using bytearray = std::array<std::uint8_t, N>;
+
 namespace Command
 {
-std::array<std::uint8_t, 12> Read_A8h(long int TargetSector, int NbSectors,
-                                      bool FUAbit)
+bytearray<12> Read_A8h(long int TargetSector, int NbSectors, bool FUAbit)
 {
-  std::array<std::uint8_t, 12> rv = {
-      0xA8,
-      static_cast<std::uint8_t>(FUAbit << 3),
-      static_cast<std::uint8_t>(TargetSector >> 24),
-      static_cast<std::uint8_t>(TargetSector >> 16),
-      static_cast<std::uint8_t>(TargetSector >> 8),
-      static_cast<std::uint8_t>(TargetSector),
-      static_cast<std::uint8_t>(NbSectors >> 24),
-      static_cast<std::uint8_t>(NbSectors >> 16),
-      static_cast<std::uint8_t>(NbSectors >> 8),
-      static_cast<std::uint8_t>(NbSectors),
-      0,
-      0};
+  bytearray<12> rv = {0xA8,
+                      static_cast<std::uint8_t>(FUAbit << 3),
+                      static_cast<std::uint8_t>(TargetSector >> 24),
+                      static_cast<std::uint8_t>(TargetSector >> 16),
+                      static_cast<std::uint8_t>(TargetSector >> 8),
+                      static_cast<std::uint8_t>(TargetSector),
+                      static_cast<std::uint8_t>(NbSectors >> 24),
+                      static_cast<std::uint8_t>(NbSectors >> 16),
+                      static_cast<std::uint8_t>(NbSectors >> 8),
+                      static_cast<std::uint8_t>(NbSectors),
+                      0,
+                      0};
   return rv;
 }
 
-std::array<std::uint8_t, 10> Read_28h(long int TargetSector, int NbSectors,
-                                      bool FUAbit)
+bytearray<10> Read_28h(long int TargetSector, int NbSectors, bool FUAbit)
 {
-  std::array<std::uint8_t, 10> rv = {
-      0x28,
-      static_cast<std::uint8_t>(FUAbit << 3),
-      static_cast<std::uint8_t>(TargetSector >> 24),
-      static_cast<std::uint8_t>(TargetSector >> 16),
-      static_cast<std::uint8_t>(TargetSector >> 8),
-      static_cast<std::uint8_t>(TargetSector),
-      0,
-      static_cast<std::uint8_t>(NbSectors >> 8),
-      static_cast<std::uint8_t>(NbSectors),
-      0};
+  bytearray<10> rv = {0x28,
+                      static_cast<std::uint8_t>(FUAbit << 3),
+                      static_cast<std::uint8_t>(TargetSector >> 24),
+                      static_cast<std::uint8_t>(TargetSector >> 16),
+                      static_cast<std::uint8_t>(TargetSector >> 8),
+                      static_cast<std::uint8_t>(TargetSector),
+                      0,
+                      static_cast<std::uint8_t>(NbSectors >> 8),
+                      static_cast<std::uint8_t>(NbSectors),
+                      0};
   return rv;
 }
 
-std::array<std::uint8_t, 12> Read_28h_12(long int TargetSector, int NbSectors,
-                                         bool FUAbit)
+bytearray<12> Read_28h_12(long int TargetSector, int NbSectors, bool FUAbit)
 {
-  std::array<std::uint8_t, 12> rv = {
-      0x28,
-      static_cast<std::uint8_t>(FUAbit << 3),
-      static_cast<std::uint8_t>(TargetSector >> 24),
-      static_cast<std::uint8_t>(TargetSector >> 16),
-      static_cast<std::uint8_t>(TargetSector >> 8),
-      static_cast<std::uint8_t>(TargetSector),
-      static_cast<std::uint8_t>(NbSectors >> 24),
-      static_cast<std::uint8_t>(NbSectors >> 16),
-      static_cast<std::uint8_t>(NbSectors >> 8),
-      static_cast<std::uint8_t>(NbSectors),
-      0,
-      0};
+  bytearray<12> rv = {0x28,
+                      static_cast<std::uint8_t>(FUAbit << 3),
+                      static_cast<std::uint8_t>(TargetSector >> 24),
+                      static_cast<std::uint8_t>(TargetSector >> 16),
+                      static_cast<std::uint8_t>(TargetSector >> 8),
+                      static_cast<std::uint8_t>(TargetSector),
+                      static_cast<std::uint8_t>(NbSectors >> 24),
+                      static_cast<std::uint8_t>(NbSectors >> 16),
+                      static_cast<std::uint8_t>(NbSectors >> 8),
+                      static_cast<std::uint8_t>(NbSectors),
+                      0,
+                      0};
   return rv;
 }
 
-std::array<std::uint8_t, 12> Read_BEh(long int TargetSector, int NbSectors)
+bytearray<12> Read_BEh(long int TargetSector, int NbSectors)
 {
-  std::array<std::uint8_t, 12> rv = {
-      0xBE,
-      0x00, // 0x04 = audio data only, 0x00 = any type
-      static_cast<std::uint8_t>(TargetSector >> 24),
-      static_cast<std::uint8_t>(TargetSector >> 16),
-      static_cast<std::uint8_t>(TargetSector >> 8),
-      static_cast<std::uint8_t>(TargetSector),
-      static_cast<std::uint8_t>(NbSectors >> 16),
-      static_cast<std::uint8_t>(NbSectors >> 8),
-      static_cast<std::uint8_t>(NbSectors),
-      0x10, // just data
-      0,    // no subcode
-      0};
+  bytearray<12> rv = {0xBE,
+                      0x00, // 0x04 = audio data only, 0x00 = any type
+                      static_cast<std::uint8_t>(TargetSector >> 24),
+                      static_cast<std::uint8_t>(TargetSector >> 16),
+                      static_cast<std::uint8_t>(TargetSector >> 8),
+                      static_cast<std::uint8_t>(TargetSector),
+                      static_cast<std::uint8_t>(NbSectors >> 16),
+                      static_cast<std::uint8_t>(NbSectors >> 8),
+                      static_cast<std::uint8_t>(NbSectors),
+                      0x10, // just data
+                      0,    // no subcode
+                      0};
   return rv;
 }
 
-std::array<std::uint8_t, 10> Read_D4h(long int TargetSector, int NbSectors,
-                                      bool FUAbit)
+bytearray<10> Read_D4h(long int TargetSector, int NbSectors, bool FUAbit)
 {
-  std::array<std::uint8_t, 10> rv = {
-      0xD4,
-      static_cast<std::uint8_t>(FUAbit << 3),
-      static_cast<std::uint8_t>(TargetSector >> 24),
-      static_cast<std::uint8_t>(TargetSector >> 16),
-      static_cast<std::uint8_t>(TargetSector >> 8),
-      static_cast<std::uint8_t>(TargetSector),
-      static_cast<std::uint8_t>(NbSectors >> 16),
-      static_cast<std::uint8_t>(NbSectors >> 8),
-      static_cast<std::uint8_t>(NbSectors),
-      0};
+  bytearray<10> rv = {0xD4,
+                      static_cast<std::uint8_t>(FUAbit << 3),
+                      static_cast<std::uint8_t>(TargetSector >> 24),
+                      static_cast<std::uint8_t>(TargetSector >> 16),
+                      static_cast<std::uint8_t>(TargetSector >> 8),
+                      static_cast<std::uint8_t>(TargetSector),
+                      static_cast<std::uint8_t>(NbSectors >> 16),
+                      static_cast<std::uint8_t>(NbSectors >> 8),
+                      static_cast<std::uint8_t>(NbSectors),
+                      0};
   return rv;
 }
 
-std::array<std::uint8_t, 10> Read_D5h(long int TargetSector, int NbSectors,
-                                      bool FUAbit)
+bytearray<10> Read_D5h(long int TargetSector, int NbSectors, bool FUAbit)
 {
-  std::array<std::uint8_t, 10> rv = {
-      0xD5,
-      static_cast<std::uint8_t>(FUAbit << 3),
-      static_cast<std::uint8_t>(TargetSector >> 24),
-      static_cast<std::uint8_t>(TargetSector >> 16),
-      static_cast<std::uint8_t>(TargetSector >> 8),
-      static_cast<std::uint8_t>(TargetSector),
-      static_cast<std::uint8_t>(NbSectors >> 16),
-      static_cast<std::uint8_t>(NbSectors >> 8),
-      static_cast<std::uint8_t>(NbSectors),
-      0};
+  bytearray<10> rv = {0xD5,
+                      static_cast<std::uint8_t>(FUAbit << 3),
+                      static_cast<std::uint8_t>(TargetSector >> 24),
+                      static_cast<std::uint8_t>(TargetSector >> 16),
+                      static_cast<std::uint8_t>(TargetSector >> 8),
+                      static_cast<std::uint8_t>(TargetSector),
+                      static_cast<std::uint8_t>(NbSectors >> 16),
+                      static_cast<std::uint8_t>(NbSectors >> 8),
+                      static_cast<std::uint8_t>(NbSectors),
+                      0};
   return rv;
 }
 
-std::array<std::uint8_t, 12> Read_D8h(long int TargetSector, int NbSectors,
-                                      bool FUAbit)
+bytearray<12> Read_D8h(long int TargetSector, int NbSectors, bool FUAbit)
 {
-  std::array<std::uint8_t, 12> rv = {
-      0xD8,
-      static_cast<std::uint8_t>(FUAbit << 3),
-      static_cast<std::uint8_t>(TargetSector >> 24),
-      static_cast<std::uint8_t>(TargetSector >> 16),
-      static_cast<std::uint8_t>(TargetSector >> 8),
-      static_cast<std::uint8_t>(TargetSector),
-      static_cast<std::uint8_t>(NbSectors >> 24),
-      static_cast<std::uint8_t>(NbSectors >> 16),
-      static_cast<std::uint8_t>(NbSectors >> 8),
-      static_cast<std::uint8_t>(NbSectors),
-      0,
-      0};
+  bytearray<12> rv = {0xD8,
+                      static_cast<std::uint8_t>(FUAbit << 3),
+                      static_cast<std::uint8_t>(TargetSector >> 24),
+                      static_cast<std::uint8_t>(TargetSector >> 16),
+                      static_cast<std::uint8_t>(TargetSector >> 8),
+                      static_cast<std::uint8_t>(TargetSector),
+                      static_cast<std::uint8_t>(NbSectors >> 24),
+                      static_cast<std::uint8_t>(NbSectors >> 16),
+                      static_cast<std::uint8_t>(NbSectors >> 8),
+                      static_cast<std::uint8_t>(NbSectors),
+                      0,
+                      0};
   return rv;
 }
 
-std::array<std::uint8_t, 12> PlextorFUAFlush(long int TargetSector)
+bytearray<12> PlextorFUAFlush(long int TargetSector)
 {
   // size stays zero, that's how this command works
   // MMC spec specifies that "A Transfer Length of zero indicates that no
@@ -276,65 +265,62 @@ std::array<std::uint8_t, 12> PlextorFUAFlush(long int TargetSector)
   return Read_28h_12(TargetSector, 0, 1);
 }
 
-std::array<std::uint8_t, 6> RequestSense(std::uint8_t AllocationLength)
+bytearray<6> RequestSense(std::uint8_t AllocationLength)
 {
-  std::array<std::uint8_t, 6> rv = {3, // REQUEST SENSE
-                                    0,
-                                    0,
-                                    0,
-                                    AllocationLength, // allocation size
-                                    0};
+  bytearray<6> rv = {3, // REQUEST SENSE
+                     0,
+                     0,
+                     0,
+                     AllocationLength, // allocation size
+                     0};
   return rv;
 }
 
-std::array<std::uint8_t, 10> ModeSense(unsigned char PageCode,
-                                       unsigned char SubPageCode, int size)
+bytearray<10> ModeSense(unsigned char PageCode, unsigned char SubPageCode,
+                        int size)
 {
-  std::array<std::uint8_t, 10> rv = {0x5A, // MODE SENSE(10)
-                                     0,
-                                     PageCode,
-                                     SubPageCode,
-                                     0,
-                                     0,
-                                     0,
-                                     uint8_t((size >> 8) & 0xFF), // size
-                                     uint8_t((size)&0xFF),
-                                     0};
+  bytearray<10> rv = {0x5A, // MODE SENSE(10)
+                      0,
+                      PageCode,
+                      SubPageCode,
+                      0,
+                      0,
+                      0,
+                      uint8_t((size >> 8) & 0xFF), // size
+                      uint8_t((size)&0xFF),
+                      0};
   return rv;
 }
 
-std::array<std::uint8_t, 10> ModeSelect(std::uint16_t size)
+bytearray<10> ModeSelect(std::uint16_t size)
 {
-  std::array<std::uint8_t, 10> rv = {
-      0x55, 0x10, 0, 0, 0, 0, 0, uint8_t(size >> 8), uint8_t(size), 0};
+  bytearray<10> rv = {0x55,          0x10, 0, 0, 0, 0, 0, uint8_t(size >> 8),
+                      uint8_t(size), 0};
   return rv;
 }
 
-std::array<std::uint8_t, 10> Prefetch(long int TargetSector,
-                                      unsigned int NbSectors)
+bytearray<10> Prefetch(long int TargetSector, unsigned int NbSectors)
 {
-  std::array<std::uint8_t, 10> rv = {
-      0x34, // PREFETCH
-      0,
-      uint8_t((TargetSector >> 24) & 0xFF), // target sector
-      uint8_t((TargetSector >> 16) & 0xFF),
-      uint8_t((TargetSector >> 8) & 0xFF),
-      uint8_t((TargetSector)&0xFF),
-      0,
-      uint8_t((NbSectors >> 8) & 0xFF), // size
-      uint8_t((NbSectors)&0xFF),
-      0};
+  bytearray<10> rv = {0x34, // PREFETCH
+                      0,
+                      uint8_t((TargetSector >> 24) & 0xFF), // target sector
+                      uint8_t((TargetSector >> 16) & 0xFF),
+                      uint8_t((TargetSector >> 8) & 0xFF),
+                      uint8_t((TargetSector)&0xFF),
+                      0,
+                      uint8_t((NbSectors >> 8) & 0xFF), // size
+                      uint8_t((NbSectors)&0xFF),
+                      0};
   return rv;
 }
 
-std::array<std::uint8_t, 6> Inquiry(std::uint8_t AllocationLength)
+bytearray<6> Inquiry(std::uint8_t AllocationLength)
 {
-  std::array<std::uint8_t, 6> rv = {0x12, 0, 0, 0, AllocationLength, 0};
+  bytearray<6> rv = {0x12, 0, 0, 0, AllocationLength, 0};
   return rv;
 }
 
-std::array<std::uint8_t, 12> SetCDSpeed(unsigned char ReadSpeedX,
-                                        unsigned char WriteSpeedX)
+bytearray<12> SetCDSpeed(unsigned char ReadSpeedX, unsigned char WriteSpeedX)
 {
   unsigned int ReadSpeedkB = 0xFFFF;
   if (ReadSpeedX != 0)
@@ -344,19 +330,18 @@ std::array<std::uint8_t, 12> SetCDSpeed(unsigned char ReadSpeedX,
     ReadSpeedkB = (ReadSpeedX * 176) + 2; // 1x CD = 176kB/s
   }
   unsigned int WriteSpeedkB = (WriteSpeedX * 176);
-  std::array<std::uint8_t, 12> rv = {
-      0xBB, // SET CD SPEED
-      0,
-      static_cast<std::uint8_t>(ReadSpeedkB >> 8),
-      static_cast<std::uint8_t>(ReadSpeedkB),
-      static_cast<std::uint8_t>(WriteSpeedkB >> 8),
-      static_cast<std::uint8_t>(WriteSpeedkB),
-      0,
-      0,
-      0,
-      0,
-      0,
-      0};
+  bytearray<12> rv = {0xBB, // SET CD SPEED
+                      0,
+                      static_cast<std::uint8_t>(ReadSpeedkB >> 8),
+                      static_cast<std::uint8_t>(ReadSpeedkB),
+                      static_cast<std::uint8_t>(WriteSpeedkB >> 8),
+                      static_cast<std::uint8_t>(WriteSpeedkB),
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0};
   return rv;
 }
 } // namespace Command
