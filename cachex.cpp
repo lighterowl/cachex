@@ -52,8 +52,6 @@ struct platform
 //#define RELEASE_VERSION
 #undef RELEASE_VERSION
 
-#define NBPEAKMEASURES 100
-#define NBDELTA 50
 #define MAX_CACHE_LINES 10
 #define NB_IGNORE_MEASURES 5
 
@@ -132,15 +130,6 @@ bool SuperDebugMode = false;
 double ThresholdRatioMethod2 = 0.9;
 int CachedNonCachedSpeedFactor = 4;
 int MaxCacheSectors = 1000;
-int PeakMeasuresIndexes[NBPEAKMEASURES];
-
-typedef struct
-{
-  int delta;
-  int frequency;
-  short divider;
-} sDeltaArray;
-sDeltaArray DeltaArray[NBDELTA];
 
 template <std::size_t N> using bytearray = std::array<std::uint8_t, N>;
 
@@ -1033,18 +1022,14 @@ int TestCacheLineSize_Stat(sReadCommand &ReadCommand, long int TargetSector,
   int CurrentDelta = 0;
   int MostFrequentDeltaIndex = 0;
   int MaxDeltaFrequency = 0;
-
-  // init
-  for (i = 0; i < NBPEAKMEASURES; i++)
+  std::array<int, 100> PeakMeasuresIndexes{};
+  struct sDelta
   {
-    PeakMeasuresIndexes[i] = 0;
-    if (i < NBDELTA)
-    {
-      DeltaArray[i].delta = 0;
-      DeltaArray[i].frequency = 0;
-      DeltaArray[i].divider = 0;
-    }
-  }
+    int delta = 0;
+    int frequency = 0;
+    short divider = 0;
+  };
+  std::array<sDelta, 50> DeltaArray;
 
   // initial read.
   ClearCache();
@@ -1065,7 +1050,7 @@ int TestCacheLineSize_Stat(sReadCommand &ReadCommand, long int TargetSector,
   // find all values above 90% of max
   Threshold = Maxdelay * ThresholdRatioMethod2;
   for (i = 1, NbPeakMeasures = 0;
-       (i < NbMeasures) && (NbPeakMeasures < NBPEAKMEASURES); i++)
+       (i < NbMeasures) && (NbPeakMeasures < PeakMeasuresIndexes.size()); i++)
   {
     if (Measures[i] > Threshold)
       PeakMeasuresIndexes[NbPeakMeasures++] = i;
