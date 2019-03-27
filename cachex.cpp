@@ -449,13 +449,13 @@ struct sReadCommand
   bool operator==(const char *name) const { return strcmp(Name, name) == 0; }
 };
 
-sReadCommand Commands[] = {
-    {"BEh", &Read_BEh, false, false}, {"A8h", &Read_A8h, false, true},
-    {"28h", &Read_28h, false, true},  {"28h_12", &Read_28h_12, false, true},
-    {"D4h", &Read_D4h, false, true},  {"D5h", &Read_D5h, false, true},
-    {"D8h", &Read_D8h, false, true}};
-
-#define NB_READ_COMMANDS (sizeof(Commands) / sizeof(*Commands))
+std::array<sReadCommand, 7> Commands = {{{"BEh", &Read_BEh, false, false},
+                                         {"A8h", &Read_A8h, false, true},
+                                         {"28h", &Read_28h, false, true},
+                                         {"28h_12", &Read_28h_12, false, true},
+                                         {"D4h", &Read_D4h, false, true},
+                                         {"D5h", &Read_D5h, false, true},
+                                         {"D8h", &Read_D8h, false, true}}};
 
 sReadCommand &GetSupportedCommand()
 {
@@ -780,7 +780,8 @@ void TestCacheSpeedImpact(long int TargetSector, int NbReads)
 // TestRCDBitWorks
 //
 // test if cache can be disabled via RCD bit
-int TestRCDBitWorks(int ReadCommand, long int TargetSector, int NbTests)
+int TestRCDBitWorks(sReadCommand &ReadCommand, long int TargetSector,
+                    int NbTests)
 {
   int i;
   int InvalidationSuccess = 0;
@@ -798,11 +799,11 @@ int TestRCDBitWorks(int ReadCommand, long int TargetSector, int NbTests)
 
     // first test : normal cache test
     ClearCache();
-    auto result = Commands[ReadCommand].pFunc(TargetSector, NbBurstReadSectors,
-                                              false); // init read
+    auto result = ReadCommand.pFunc(TargetSector, NbBurstReadSectors,
+                                    false); // init read
     InitDelay = result.Duration;
-    result = Commands[ReadCommand].pFunc(TargetSector + NbBurstReadSectors,
-                                         NbBurstReadSectors, false);
+    result = ReadCommand.pFunc(TargetSector + NbBurstReadSectors,
+                               NbBurstReadSectors, false);
     Delay = result.Duration;
     DEBUG("\n1) %d : %.2f ms / %d : %.2f ms", TargetSector, InitDelay,
           TargetSector + NbBurstReadSectors, Delay);
@@ -816,11 +817,11 @@ int TestRCDBitWorks(int ReadCommand, long int TargetSector, int NbTests)
 
     // second test : with cache disabled
     ClearCache();
-    result = Commands[ReadCommand].pFunc(TargetSector, NbBurstReadSectors,
-                                         false); // init read
+    result = ReadCommand.pFunc(TargetSector, NbBurstReadSectors,
+                               false); // init read
     InitDelay = result.Duration;
-    Commands[ReadCommand].pFunc(TargetSector + NbBurstReadSectors,
-                                NbBurstReadSectors, false);
+    ReadCommand.pFunc(TargetSector + NbBurstReadSectors, NbBurstReadSectors,
+                      false);
     Delay2 = result.Duration;
     DEBUG("\n2) %d : %.2f ms / %d : %.2f ms", TargetSector, InitDelay,
           TargetSector + NbBurstReadSectors, Delay2);
@@ -838,20 +839,9 @@ int TestRCDBitWorks(int ReadCommand, long int TargetSector, int NbTests)
 // wrapper for TestRCDBit
 int TestRCDBitWorksWrapper(long int TargetSector, int NbTests)
 {
-  int ValidReadCommand;
-  int retval = -1;
-
-  for (ValidReadCommand = 0; ValidReadCommand < NB_READ_COMMANDS;
-       ValidReadCommand++)
-  {
-    if (Commands[ValidReadCommand].Supported)
-    {
-      DEBUG("\ninfo: using command %s", Commands[ValidReadCommand].Name);
-      retval = TestRCDBitWorks(ValidReadCommand, TargetSector, NbTests);
-      break;
-    }
-  }
-  return retval;
+  auto &&cmd = GetSupportedCommand();
+  DEBUG("\ninfo: using command %s", cmd.Name);
+  return TestRCDBitWorks(cmd, TargetSector, NbTests);
 }
 
 //------------------------------------------------------------------------------
@@ -1400,10 +1390,10 @@ void PrintUsage()
   //    printf("           -t xx  : threshold at xx%% for cache tests\n");
   printf("           -x xx  : use cached/non cached ratio xx\n");
   printf("           -r xx  : use read command xx (one of ");
-  for (int i = 0; i < NB_READ_COMMANDS; ++i)
+  for (auto &&cmd : Commands)
   {
-    printf("%s", Commands[i].Name);
-    if (i != (NB_READ_COMMANDS - 1))
+    printf("%s", cmd.Name);
+    if (&cmd != &Commands.back())
     {
       printf(", ");
     }
