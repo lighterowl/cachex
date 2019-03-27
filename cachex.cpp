@@ -1410,7 +1410,7 @@ void PrintUsage()
 int main(int argc, char **argv)
 {
   const char *DrivePath = nullptr;
-  int MaxIndex, i, j, v;
+  int i, v;
   int MaxReadSpeed = 0;
   bool SpinDriveFlag = false;
   bool ShowDriveInfos = false;
@@ -1707,8 +1707,7 @@ int main(int argc, char **argv)
 
     // SIZE : method 3 (STATS)
     printf(CACHELINESIZETEST, 3);
-    MaxIndex = TestCacheLineSizeWrapper(15000, NbSectorsMethod2,
-                                        NbBurstReadSectors, 3);
+    TestCacheLineSizeWrapper(15000, NbSectorsMethod2, NbBurstReadSectors, 3);
     platform::set_normal_priority();
   }
 
