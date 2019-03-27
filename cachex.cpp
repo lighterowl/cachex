@@ -123,7 +123,6 @@ namespace
 // global variables
 int NbBurstReadSectors = 1;
 double Delay = 0, Delay2 = 0, InitDelay = 0;
-double AverageDelay = 0;
 platform::device_handle hVolume;
 bool DebugMode = false;
 bool SuperDebugMode = false;
@@ -728,12 +727,11 @@ int TestPlextorFUACommandWorksWrapper(long int TargetSector, int NbTests)
 //
 // TimeMultipleReads
 //
-void TimeMultipleReads(sReadCommand &cmd, long int TargetSector, int NbReads,
-                       bool FUAbit)
+double TimeMultipleReads(sReadCommand &cmd, long int TargetSector, int NbReads,
+                         bool FUAbit)
 {
   int i = 0;
-
-  AverageDelay = 0;
+  double AverageDelay = 0;
 
   for (i = 0; i < NbReads; i++)
   {
@@ -741,6 +739,7 @@ void TimeMultipleReads(sReadCommand &cmd, long int TargetSector, int NbReads,
     Delay = result.Duration;
     AverageDelay = (((AverageDelay * i) + Delay) / (i + 1));
   }
+  return AverageDelay;
 }
 
 //
@@ -757,12 +756,11 @@ void TestCacheSpeedImpact(long int TargetSector, int NbReads)
   }
 
   cmd->pFunc(TargetSector, NbBurstReadSectors, false); // initial load
+  printf(AVERAGE_NORMAL, cmd->Name,
+         TimeMultipleReads(*cmd, TargetSector, NbReads, false));
 
-  TimeMultipleReads(*cmd, TargetSector, NbReads, false);
-  printf(AVERAGE_NORMAL, cmd->Name, AverageDelay);
-
-  TimeMultipleReads(*cmd, TargetSector, NbReads, true); // with FUA
-  printf(AVERAGE_FUA, AverageDelay);
+  // with FUA
+  printf(AVERAGE_FUA, TimeMultipleReads(*cmd, TargetSector, NbReads, true));
 }
 
 //
