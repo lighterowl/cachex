@@ -1359,6 +1359,18 @@ int TestCacheLineSizePrefetch(long int TargetSector)
   return NbSectors - 1;
 }
 
+template <typename TestFn>
+void RunCacheTest(bool SpinDriveFlag, unsigned int SpinSeconds, TestFn &&fn)
+{
+  platform::set_critical_priority();
+  if (SpinDriveFlag)
+  {
+    SpinDrive(SpinSeconds);
+  }
+  fn();
+  platform::set_normal_priority();
+}
+
 /*
 
   modifiers      l   b   x   r   s   m   n
@@ -1652,63 +1664,42 @@ int main(int argc, char **argv)
   //
   if (CacheMethod1)
   {
-    Nbtests = (Nbtests == 0) ? 10 : Nbtests;
-    platform::set_critical_priority();
-    if (SpinDriveFlag)
-    {
-      SpinDrive(NbSecsDriveSpin);
-    }
-
     // SIZE : method 1
-    printf(CACHELINESIZETEST2);
-    CacheLineSizeSectors = TestCacheLineSizeWrapper(15000, Nbtests, 0, 1);
+    RunCacheTest(SpinDriveFlag, NbSecsDriveSpin, [&]() {
+      Nbtests = (Nbtests == 0) ? 10 : Nbtests;
 
-    platform::set_normal_priority();
+      printf(CACHELINESIZETEST2);
+      CacheLineSizeSectors = TestCacheLineSizeWrapper(15000, Nbtests, 0, 1);
+    });
   }
 
   if (CacheMethod2)
   {
-    Nbtests = (Nbtests == 0) ? 20 : Nbtests;
-    platform::set_critical_priority();
-    if (SpinDriveFlag)
-    {
-      SpinDrive(NbSecsDriveSpin);
-    }
-
     // SIZE : method 2
-    printf(CACHELINESIZETEST, 2);
-    CacheLineSizeSectors = TestCacheLineSizeWrapper(15000, Nbtests, 0, 2);
-
-    platform::set_normal_priority();
+    RunCacheTest(SpinDriveFlag, NbSecsDriveSpin, [&]() {
+      Nbtests = (Nbtests == 0) ? 20 : Nbtests;
+      printf(CACHELINESIZETEST, 2);
+      CacheLineSizeSectors = TestCacheLineSizeWrapper(15000, Nbtests, 0, 2);
+    });
   }
 
   if (CacheNbTest)
   {
-    Nbtests = (Nbtests == 0) ? 5 : Nbtests;
-    platform::set_critical_priority();
-    if (SpinDriveFlag)
-    {
-      SpinDrive(NbSecsDriveSpin);
-    }
-
     // NUMBER
-    printf(CACHELINENBTEST);
-    CacheLineNumbers = TestCacheLineNumberWrapper(15000, Nbtests);
-    platform::set_normal_priority();
+    RunCacheTest(SpinDriveFlag, NbSecsDriveSpin, [&]() {
+      Nbtests = (Nbtests == 0) ? 5 : Nbtests;
+      printf(CACHELINESIZETEST, 2);
+      CacheLineSizeSectors = TestCacheLineSizeWrapper(15000, Nbtests, 0, 2);
+    });
   }
 
   if (CacheMethod3)
   {
-    platform::set_critical_priority();
-    if (SpinDriveFlag)
-    {
-      SpinDrive(NbSecsDriveSpin);
-    }
-
     // SIZE : method 3 (STATS)
-    printf(CACHELINESIZETEST, 3);
-    TestCacheLineSizeWrapper(15000, NbSectorsMethod2, NbBurstReadSectors, 3);
-    platform::set_normal_priority();
+    RunCacheTest(SpinDriveFlag, NbSecsDriveSpin, [&]() {
+      printf(CACHELINESIZETEST, 3);
+      TestCacheLineSizeWrapper(15000, NbSectorsMethod2, NbBurstReadSectors, 3);
+    });
   }
 
   if (CacheMethod4)
