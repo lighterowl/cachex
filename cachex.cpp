@@ -41,6 +41,7 @@ struct platform
 };
 #endif
 
+#include <cassert>
 #include <cstdint>
 #include <cstdio>
 
@@ -437,14 +438,16 @@ CommandResult Read_D8h(long int TargetSector, int NbSectors, bool FUAbit)
 int CacheLineSizeSectors = 0;
 int CacheLineNumbers = 0;
 
-typedef struct
+struct sReadCommand
 {
+  sReadCommand(const sReadCommand &) = delete;
+
   const char *const Name;
   CommandResult (*pFunc)(long int, int, bool);
   bool Supported;
   bool FUAbitSupported;
   bool operator==(const char *name) const { return strcmp(Name, name) == 0; }
-} sReadCommand;
+};
 
 sReadCommand Commands[] = {
     {"BEh", &Read_BEh, false, false}, {"A8h", &Read_A8h, false, true},
@@ -453,6 +456,24 @@ sReadCommand Commands[] = {
     {"D8h", &Read_D8h, false, true}};
 
 #define NB_READ_COMMANDS (sizeof(Commands) / sizeof(*Commands))
+
+sReadCommand &GetSupportedCommand()
+{
+  auto it = std::find_if(std::begin(Commands), std::end(Commands),
+                         [](auto &&cmd) { return cmd.Supported; });
+  // main() should quit if no valid read commands were found.
+  assert(it != std::end(Commands));
+  return *it;
+}
+
+sReadCommand *GetFUASupportedCommand()
+{
+  auto it =
+      std::find_if(std::begin(Commands), std::end(Commands), [](auto &&cmd) {
+        return cmd.Supported && cmd.FUAbitSupported;
+      });
+  return it == std::end(Commands) ? nullptr : &(*it);
+}
 
 CommandResult PlextorFUAFlush(long int TargetSector)
 {
@@ -521,50 +542,27 @@ bool PrintDriveInfo()
 //
 bool ClearCache()
 {
-  int i, j;
-  bool retval = false;
-
-  for (i = 0; i < NB_READ_COMMANDS; i++)
+  auto &&cmd = GetSupportedCommand();
+  for (int i = 0; i < MAX_CACHE_LINES; i++)
   {
-    if (Commands[i].Supported)
-    {
-      for (j = 0; j < MAX_CACHE_LINES; j++)
-      {
-        // old code added the original return value from these functions
-        // but then assigned true in the next line anyway, so...
-        Commands[i].pFunc((MAX_CACHE_LINES - j + 1) * 1000, 1, false);
-      }
-      retval = true;
-      break;
-    }
+    // old code added the original return value from these functions
+    // but then assigned true in the next line anyway, so...
+    cmd.pFunc((MAX_CACHE_LINES - i + 1) * 1000, 1, false);
   }
-  return retval;
+  return true;
 }
 
 bool SpinDrive(unsigned int Seconds)
 {
-  bool retval = false;
-  int i = 0, j = 0;
-
-  for (i = 0; i < NB_READ_COMMANDS; i++)
+  auto &&cmd = GetSupportedCommand();
+  DEBUG("%s", SPINNINGDRIVE);
+  auto TimeStart = platform::monotonic_clock();
+  int i = 0;
+  while (platform::monotonic_clock() - TimeStart <= (Seconds * 1000))
   {
-    if (Commands[i].Supported)
-    {
-      retval = true;
-      break;
-    }
+    cmd.pFunc((10000 + (i++)) % 50000, 1, false);
   }
-
-  if (retval)
-  {
-    DEBUG("%s", SPINNINGDRIVE);
-    auto TimeStart = platform::monotonic_clock();
-    while (platform::monotonic_clock() - TimeStart <= (Seconds * 1000))
-    {
-      Commands[i].pFunc((10000 + (j++)) % 50000, 1, false);
-    }
-  }
-  return retval;
+  return true;
 }
 
 CommandResult SetDriveSpeed(unsigned char ReadSpeedX, unsigned char WriteSpeedX)
@@ -644,9 +642,8 @@ bool TestSupportedReadCommands()
 {
   printf(SUPPORTEDREADCOMMANDS);
   bool rv = false;
-  for (int i = 0; i < NB_READ_COMMANDS; i++)
+  for (auto &&cmd : Commands)
   {
-    auto &&cmd = Commands[i];
     if (cmd.pFunc(10000, 1, false))
     {
       rv = true;
@@ -689,7 +686,7 @@ bool TestPlextorFUACommand()
 // TestPlextorFUACommandWorks
 //
 // test if Plextor's flushing command actually works
-int TestPlextorFUACommandWorks(int ReadCommand, long int TargetSector,
+int TestPlextorFUACommandWorks(sReadCommand &ReadCommand, long int TargetSector,
                                int NbTests)
 {
   int InvalidationSuccess = 0;
@@ -702,21 +699,21 @@ int TestPlextorFUACommandWorks(int ReadCommand, long int TargetSector,
   {
     // first test : normal cache test
     ClearCache();
-    auto result = Commands[ReadCommand].pFunc(TargetSector, NbBurstReadSectors,
-                                              false); // init read
+    auto result = ReadCommand.pFunc(TargetSector, NbBurstReadSectors,
+                                    false); // init read
     InitDelay = result.Duration;
-    result = Commands[ReadCommand].pFunc(TargetSector + NbBurstReadSectors,
-                                         NbBurstReadSectors, false);
+    result = ReadCommand.pFunc(TargetSector + NbBurstReadSectors,
+                               NbBurstReadSectors, false);
     Delay = result.Duration;
 
     // second test : add a Plextor FUA flush command in between
     ClearCache();
-    result = Commands[ReadCommand].pFunc(TargetSector, NbBurstReadSectors,
-                                         false); // init read
+    result = ReadCommand.pFunc(TargetSector, NbBurstReadSectors,
+                               false); // init read
     InitDelay2 = result.Duration;
     PlextorFUAFlush(TargetSector);
-    result = Commands[ReadCommand].pFunc(TargetSector + NbBurstReadSectors,
-                                         NbBurstReadSectors, false);
+    result = ReadCommand.pFunc(TargetSector + NbBurstReadSectors,
+                               NbBurstReadSectors, false);
     Delay2 = result.Duration;
     DEBUG("\n %.2f ms / %.2f ms -> %.2f ms / %.2f ms", InitDelay, Delay,
           InitDelay2, Delay2);
@@ -734,28 +731,16 @@ int TestPlextorFUACommandWorks(int ReadCommand, long int TargetSector,
 // wrapper for TestPlextorFUACommandWorks
 int TestPlextorFUACommandWorksWrapper(long int TargetSector, int NbTests)
 {
-  int ValidReadCommand;
-  int retval = 0;
-
-  for (ValidReadCommand = 0; ValidReadCommand < NB_READ_COMMANDS;
-       ValidReadCommand++)
-  {
-    if (Commands[ValidReadCommand].Supported)
-    {
-      DEBUG("\ninfo: using command %s", Commands[ValidReadCommand].Name);
-      retval =
-          TestPlextorFUACommandWorks(ValidReadCommand, TargetSector, NbTests);
-      break;
-    }
-  }
-  return retval;
+  auto &&cmd = GetSupportedCommand();
+  DEBUG("\ninfo: using command %s", cmd.Name);
+  return TestPlextorFUACommandWorks(cmd, TargetSector, NbTests);
 }
 
 //
 // TimeMultipleReads
 //
-void TimeMultipleReads(unsigned char ReadCommand, long int TargetSector,
-                       int NbReads, bool FUAbit)
+void TimeMultipleReads(sReadCommand &cmd, long int TargetSector, int NbReads,
+                       bool FUAbit)
 {
   int i = 0;
 
@@ -763,8 +748,7 @@ void TimeMultipleReads(unsigned char ReadCommand, long int TargetSector,
 
   for (i = 0; i < NbReads; i++)
   {
-    auto result =
-        Commands[ReadCommand].pFunc(TargetSector, NbBurstReadSectors, FUAbit);
+    auto result = cmd.pFunc(TargetSector, NbBurstReadSectors, FUAbit);
     Delay = result.Duration;
     AverageDelay = (((AverageDelay * i) + Delay) / (i + 1));
   }
@@ -776,22 +760,20 @@ void TimeMultipleReads(unsigned char ReadCommand, long int TargetSector,
 // compare reading times with FUA bit (to disc) and without FUA (from cache)
 void TestCacheSpeedImpact(long int TargetSector, int NbReads)
 {
-  for (int i = 0; i < NB_READ_COMMANDS; i++)
+  auto cmd = GetFUASupportedCommand();
+  if (!cmd)
   {
-    if ((Commands[i].Supported) && (Commands[i].FUAbitSupported))
-    {
-      Commands[i].pFunc(TargetSector, NbBurstReadSectors,
-                        false); // initial load
-
-      TimeMultipleReads(i, TargetSector, NbReads, false);
-      printf(AVERAGE_NORMAL, Commands[i].Name, AverageDelay);
-
-      TimeMultipleReads(i, TargetSector, NbReads, true); // with FUA
-      printf(AVERAGE_FUA, AverageDelay);
-
-      i = NB_READ_COMMANDS;
-    }
+    printf("This function requires FUA support\n");
+    return;
   }
+
+  cmd->pFunc(TargetSector, NbBurstReadSectors, false); // initial load
+
+  TimeMultipleReads(*cmd, TargetSector, NbReads, false);
+  printf(AVERAGE_NORMAL, cmd->Name, AverageDelay);
+
+  TimeMultipleReads(*cmd, TargetSector, NbReads, true); // with FUA
+  printf(AVERAGE_FUA, AverageDelay);
 }
 
 //
@@ -883,7 +865,7 @@ int TestRCDBitWorksWrapper(long int TargetSector, int NbTests)
 // line size and not the cache line size itself.
 //
 //------------------------------------------------------------------------------
-int TestCacheLineSize_Straight(unsigned char ReadCommand, long int TargetSector,
+int TestCacheLineSize_Straight(sReadCommand &ReadCommand, long int TargetSector,
                                int NbMeasures)
 {
   int i, TargetSectorOffset, CacheLineSize;
@@ -899,8 +881,7 @@ int TestCacheLineSize_Straight(unsigned char ReadCommand, long int TargetSector,
 
     // initial read. After this the drive's cache should be filled
     // with a number of sectors following this one.
-    auto result =
-        Commands[ReadCommand].pFunc(TargetSector, NbBurstReadSectors, false);
+    auto result = ReadCommand.pFunc(TargetSector, NbBurstReadSectors, false);
     InitialDelay = result.Duration;
     SUPERDEBUG("\n init %d: %f", TargetSector, InitialDelay);
 
@@ -910,8 +891,8 @@ int TestCacheLineSize_Straight(unsigned char ReadCommand, long int TargetSector,
     for (TargetSectorOffset = 0; TargetSectorOffset < MaxCacheSectors;
          TargetSectorOffset += NbBurstReadSectors)
     {
-      auto result = Commands[ReadCommand].pFunc(
-          TargetSector + TargetSectorOffset, NbBurstReadSectors, false);
+      auto result = ReadCommand.pFunc(TargetSector + TargetSectorOffset,
+                                      NbBurstReadSectors, false);
       Delay = result.Duration;
       SUPERDEBUG("\n %d: %f", TargetSector + TargetSectorOffset, Delay);
 
@@ -963,7 +944,7 @@ int TestCacheLineSize_Straight(unsigned char ReadCommand, long int TargetSector,
 // threshold value and not really the cache size.
 //
 //------------------------------------------------------------------------------
-int TestCacheLineSize_Wrap(unsigned char ReadCommand, long int TargetSector,
+int TestCacheLineSize_Wrap(sReadCommand &ReadCommand, long int TargetSector,
                            int NbMeasures)
 {
   int i, TargetSectorOffset, CacheLineSize;
@@ -978,12 +959,10 @@ int TestCacheLineSize_Wrap(unsigned char ReadCommand, long int TargetSector,
 
     // initial read. After this the drive's cache should be filled
     // with a number of sectors following this one.
-    auto result =
-        Commands[ReadCommand].pFunc(TargetSector, NbBurstReadSectors, false);
+    auto result = ReadCommand.pFunc(TargetSector, NbBurstReadSectors, false);
     InitialDelay = result.Duration;
     SUPERDEBUG("\n init %d: %f", TargetSector, InitialDelay);
-    result =
-        Commands[ReadCommand].pFunc(TargetSector, NbBurstReadSectors, false);
+    result = ReadCommand.pFunc(TargetSector, NbBurstReadSectors, false);
     PreviousInitDelay = result.Duration;
     SUPERDEBUG("\n %d: %f", TargetSector, PreviousInitDelay);
 
@@ -994,13 +973,12 @@ int TestCacheLineSize_Wrap(unsigned char ReadCommand, long int TargetSector,
     for (TargetSectorOffset = 1; TargetSectorOffset < MaxCacheSectors;
          TargetSectorOffset += NbBurstReadSectors)
     {
-      result = Commands[ReadCommand].pFunc(TargetSector + TargetSectorOffset,
-                                           NbBurstReadSectors, false);
+      result = ReadCommand.pFunc(TargetSector + TargetSectorOffset,
+                                 NbBurstReadSectors, false);
       Delay = result.Duration;
       SUPERDEBUG("\n %d: %f", TargetSector + TargetSectorOffset, Delay);
 
-      result =
-          Commands[ReadCommand].pFunc(TargetSector, NbBurstReadSectors, false);
+      result = ReadCommand.pFunc(TargetSector, NbBurstReadSectors, false);
       Delay2 = result.Duration;
       SUPERDEBUG("\n %d: %f", TargetSector, Delay2);
 
@@ -1053,7 +1031,7 @@ int TestCacheLineSize_Wrap(unsigned char ReadCommand, long int TargetSector,
 // finds cache line size with a single long burst read of NbMeasures * BurstSize
 // sectors, then try to find the cache size with statistical calculations
 //------------------------------------------------------------------------------
-int TestCacheLineSize_Stat(unsigned char ReadCommand, long int TargetSector,
+int TestCacheLineSize_Stat(sReadCommand &ReadCommand, long int TargetSector,
                            int NbMeasures, int BurstSize)
 {
   int i, j;
@@ -1080,14 +1058,13 @@ int TestCacheLineSize_Stat(unsigned char ReadCommand, long int TargetSector,
 
   // initial read.
   ClearCache();
-  auto result = Commands[ReadCommand].pFunc(TargetSector, BurstSize, false);
+  auto result = ReadCommand.pFunc(TargetSector, BurstSize, false);
   Measures.push_back(result.Duration);
 
   // fill in measures buffer
   for (i = 1; i < NbMeasures; i++)
   {
-    result = Commands[ReadCommand].pFunc(TargetSector + i * BurstSize,
-                                         BurstSize, false);
+    result = ReadCommand.pFunc(TargetSector + i * BurstSize, BurstSize, false);
     Measures.push_back(result.Duration);
   }
 
@@ -1176,29 +1153,25 @@ int TestCacheLineSize_Stat(unsigned char ReadCommand, long int TargetSector,
 int TestCacheLineSizeWrapper(long int TargetSector, int NbMeasures,
                              int BurstSize, short method)
 {
-  int ValidReadCommand;
   int retval = -1;
 
-  for (ValidReadCommand = 0; ValidReadCommand < NB_READ_COMMANDS;
-       ValidReadCommand++)
+  for (auto &&cmd : Commands)
   {
-    if (Commands[ValidReadCommand].Supported)
+    if (cmd.Supported)
     {
-      DEBUG("\ninfo: using command %s", Commands[ValidReadCommand].Name);
+      DEBUG("\ninfo: using command %s", cmd.Name);
 
       switch (method)
       {
       case 1:
-        retval =
-            TestCacheLineSize_Wrap(ValidReadCommand, TargetSector, NbMeasures);
+        retval = TestCacheLineSize_Wrap(cmd, TargetSector, NbMeasures);
         break;
       case 2:
-        retval = TestCacheLineSize_Straight(ValidReadCommand, TargetSector,
-                                            NbMeasures);
+        retval = TestCacheLineSize_Straight(cmd, TargetSector, NbMeasures);
         break;
       case 3:
-        retval = TestCacheLineSize_Stat(ValidReadCommand, TargetSector,
-                                        NbMeasures, BurstSize);
+        retval =
+            TestCacheLineSize_Stat(cmd, TargetSector, NbMeasures, BurstSize);
         break;
       default:
         printf("\nError: invalid method !!\n");
@@ -1220,7 +1193,7 @@ int TestCacheLineSizeWrapper(long int TargetSector, int NbMeasures,
 // To find out the number of cache lines, we read multiple M sectors at various
 // positions
 //------------------------------------------------------------------------------
-int TestCacheLineNumber(unsigned char ReadCommand, long int TargetSector,
+int TestCacheLineNumber(sReadCommand &ReadCommand, long int TargetSector,
                         int NbMeasures)
 {
   int i, j;
@@ -1241,17 +1214,17 @@ int TestCacheLineNumber(unsigned char ReadCommand, long int TargetSector,
 
     // initial read. After this the drive's cache should be filled
     // with a number of sectors following this one.
-    auto result = Commands[ReadCommand].pFunc(LocalTargetSector, 1, false);
+    auto result = ReadCommand.pFunc(LocalTargetSector, 1, false);
     PreviousDelay = result.Duration;
     SUPERDEBUG("\n first read at %d: %.2f", LocalTargetSector, PreviousDelay);
 
     for (j = 1; j < MAX_CACHE_LINES; j++)
     {
       // second read to load another (?) cache line
-      Commands[ReadCommand].pFunc(LocalTargetSector + 10000, 1, false);
+      ReadCommand.pFunc(LocalTargetSector + 10000, 1, false);
 
       // read 1 sector next to the original one
-      result = Commands[ReadCommand].pFunc(LocalTargetSector + 2 * j, 1, false);
+      result = ReadCommand.pFunc(LocalTargetSector + 2 * j, 1, false);
       Delay = result.Duration;
       SUPERDEBUG("\n read at %d: %.2f", LocalTargetSector + 2 * j, Delay);
 
@@ -1277,20 +1250,9 @@ int TestCacheLineNumber(unsigned char ReadCommand, long int TargetSector,
 // wrapper for TestCacheLineNumber
 int TestCacheLineNumberWrapper(long int TargetSector, int NbMeasures)
 {
-  int ValidReadCommand;
-  int retval = -1;
-
-  for (ValidReadCommand = 0; ValidReadCommand < NB_READ_COMMANDS;
-       ValidReadCommand++)
-  {
-    if (Commands[ValidReadCommand].Supported)
-    {
-      DEBUG("\ninfo: using command %s", Commands[ValidReadCommand].Name);
-      retval = TestCacheLineNumber(ValidReadCommand, TargetSector, NbMeasures);
-      break;
-    }
-  }
-  return retval;
+  auto &&cmd = GetSupportedCommand();
+  DEBUG("\ninfo: using command %s", cmd.Name);
+  return TestCacheLineNumber(cmd, TargetSector, NbMeasures);
 }
 
 //------------------------------------------------------------------------------
@@ -1298,7 +1260,7 @@ int TestCacheLineNumberWrapper(long int TargetSector, int NbMeasures)
 //
 // find size of cache invalidated by Plextor FUA command
 //------------------------------------------------------------------------------
-int TestPlextorFUAInvalidationSize(unsigned char ReadCommand,
+int TestPlextorFUAInvalidationSize(sReadCommand &ReadCommand,
                                    long int TargetSector, int NbMeasures)
 {
 #define CACHE_TEST_BLOCK 20
@@ -1318,7 +1280,7 @@ int TestPlextorFUAInvalidationSize(unsigned char ReadCommand,
 
       // initial read of 1 sector. After this the drive's cache should be
       // filled with a number of sectors following this one.
-      auto result = Commands[ReadCommand].pFunc(TargetSector, 1, false);
+      auto result = ReadCommand.pFunc(TargetSector, 1, false);
       InitialDelay = result.Duration;
       SUPERDEBUG("\n(%d) init = %.2f, thr = %.2f", i, InitialDelay,
                  (double)(InitialDelay / CachedNonCachedSpeedFactor));
@@ -1336,7 +1298,7 @@ int TestPlextorFUAInvalidationSize(unsigned char ReadCommand,
 // read sectors backwards to find this ---|  spot
       // clang-format on
 
-      Commands[ReadCommand].pFunc(TargetSector + TargetSectorOffset, 1, false);
+      ReadCommand.pFunc(TargetSector + TargetSectorOffset, 1, false);
       Delay = result.Duration;
       SUPERDEBUG(" (%d) %d: %.2f", i, TargetSector + TargetSectorOffset, Delay);
 
@@ -1353,21 +1315,9 @@ int TestPlextorFUAInvalidationSize(unsigned char ReadCommand,
 // wrapper for TestPlextorFUAInvalidationSize
 int TestPlextorFUAInvalidationSizeWrapper(long int TargetSector, int NbMeasures)
 {
-  int ValidReadCommand;
-  int retval = -1;
-
-  for (ValidReadCommand = 0; ValidReadCommand < NB_READ_COMMANDS;
-       ValidReadCommand++)
-  {
-    if (Commands[ValidReadCommand].Supported)
-    {
-      DEBUG("\ninfo: using command %s", Commands[ValidReadCommand].Name);
-      retval = TestPlextorFUAInvalidationSize(ValidReadCommand, TargetSector,
-                                              NbMeasures);
-      break;
-    }
-  }
-  return retval;
+  auto &&cmd = GetSupportedCommand();
+  DEBUG("\ninfo: using command %s", cmd.Name);
+  return TestPlextorFUAInvalidationSize(cmd, TargetSector, NbMeasures);
 }
 
 bool TestRCDBitSupport()
