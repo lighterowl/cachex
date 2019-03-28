@@ -71,8 +71,6 @@ namespace
 int NbBurstReadSectors = 1;
 double Delay = 0, Delay2 = 0, InitDelay = 0;
 platform::device_handle hVolume;
-bool DebugMode = false;
-bool SuperDebugMode = false;
 double ThresholdRatioMethod2 = 0.9;
 int CachedNonCachedSpeedFactor = 4;
 int MaxCacheSectors = 1000;
@@ -83,31 +81,18 @@ struct debugstream
   debugstream(const debugstream &) = delete;
   template <typename T> debugstream &operator<<(T val)
   {
-    if (DebugMode)
+    if (Enabled)
     {
       std::cerr << val;
     }
     return *this;
   }
+  bool Enabled = false;
+  operator bool() const { return Enabled; }
 };
 
 debugstream DEBUG;
-
-struct superdebugstream
-{
-  superdebugstream() {}
-  superdebugstream(const superdebugstream &) = delete;
-  template <typename T> superdebugstream &operator<<(T val)
-  {
-    if (SuperDebugMode)
-    {
-      std::cerr << val;
-    }
-    return *this;
-  }
-};
-
-superdebugstream SUPERDEBUG;
+debugstream SUPERDEBUG;
 
 template <std::size_t N> using bytearray = std::array<std::uint8_t, N>;
 
@@ -1164,7 +1149,7 @@ int TestCacheLineNumber(sReadCommand &ReadCommand, long int TargetSector,
   long int LocalTargetSector = TargetSector;
 
   DEBUG << "\ninfo: using c/nc ratio : " << CachedNonCachedSpeedFactor;
-  if (!DebugMode)
+  if (!DEBUG)
   {
     std::cerr << "\n";
   }
@@ -1192,7 +1177,7 @@ int TestCacheLineNumber(sReadCommand &ReadCommand, long int TargetSector,
       SUPERDEBUG << "\n read at " << (LocalTargetSector + 2 * j) << ": "
                  << std::setprecision(2) << Delay;
 
-      if (DebugMode || SuperDebugMode)
+      if (DEBUG || SUPERDEBUG)
       {
         std::cerr << "\n"
                   << std::setprecision(2) << PreviousDelay << " / "
@@ -1392,7 +1377,8 @@ void PrintUsage()
   std::cerr << ")\n";
   std::cerr << "           -s xx  : set read speed to xx (0=max)\n";
   std::cerr << "           -m xx  : look for cache size up to xx sectors\n";
-  //    std::cerr << "           -y xx  : use xx sectors for cache test method 2\n";
+  //    std::cerr << "           -y xx  : use xx sectors for cache test method
+  //    2\n";
   std::cerr << "           -n xx  : perform xx tests\n";
 }
 
@@ -1465,7 +1451,7 @@ int main(int argc, char **argv)
         ShowDriveInfos = true;
         break;
       case 'd':
-        DebugMode = true;
+        DEBUG.Enabled = true;
         break;
       case 'l':
         NbSecsDriveSpin = atoi(argv[++i]);
@@ -1507,7 +1493,7 @@ int main(int argc, char **argv)
         PFUAInvalidationSizeTest = true;
         break;
       case '.':
-        SuperDebugMode = true;
+        SUPERDEBUG.Enabled = true;
         break;
       default:
         PrintUsage();
@@ -1588,7 +1574,7 @@ int main(int argc, char **argv)
   //
   if (SetMaxDriveSpeed)
   {
-    if (DebugMode)
+    if (DEBUG)
     {
       std::cerr << "\n[+] Changing read speed to ";
       if (MaxReadSpeed == 0)
