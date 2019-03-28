@@ -1323,7 +1323,7 @@ int TestCacheLineSizePrefetch(long int TargetSector)
 }
 
 template <typename TestFn>
-void RunCacheTest(bool SpinDriveFlag, unsigned int SpinSeconds, TestFn &&fn)
+void RunTest(bool SpinDriveFlag, unsigned int SpinSeconds, TestFn &&fn)
 {
   platform::set_critical_priority();
   if (SpinDriveFlag)
@@ -1592,17 +1592,10 @@ int main(int argc, char **argv)
   //
   // 2) Test support for Plextor's FUA cache clearing command
   //
-  if (TestPlextorFUA)
+  if (TestPlextorFUA && TestPlextorFUACommand())
   {
-    Nbtests = (Nbtests == 0) ? 5 : Nbtests;
-    platform::set_critical_priority();
-    if (SpinDriveFlag)
-    {
-      SpinDrive(NbSecsDriveSpin);
-    }
-
-    if (TestPlextorFUACommand())
-    {
+    RunTest(SpinDriveFlag, NbSecsDriveSpin, [&]() {
+      Nbtests = (Nbtests == 0) ? 5 : Nbtests;
       std::cerr << "\n[+] Plextor flush tests: ";
       std::cerr << TestPlextorFUACommandWorksWrapper(15000, Nbtests) << '/'
                 << Nbtests;
@@ -1616,8 +1609,7 @@ int main(int argc, char **argv)
                   << ((InvalidatedSectors > 0) ? "ok" : "not working") << " ("
                   << InvalidatedSectors << ')';
       }
-    }
-    platform::set_normal_priority();
+    });
   }
 
   //
@@ -1627,7 +1619,7 @@ int main(int argc, char **argv)
   if (CacheMethod1)
   {
     // SIZE : method 1
-    RunCacheTest(SpinDriveFlag, NbSecsDriveSpin, [&]() {
+    RunTest(SpinDriveFlag, NbSecsDriveSpin, [&]() {
       Nbtests = (Nbtests == 0) ? 10 : Nbtests;
       std::cerr << "\n[+] Testing cache line size:";
       CacheLineSizeSectors = TestCacheLineSizeWrapper(15000, Nbtests, 0, 1);
@@ -1637,7 +1629,7 @@ int main(int argc, char **argv)
   if (CacheMethod2)
   {
     // SIZE : method 2
-    RunCacheTest(SpinDriveFlag, NbSecsDriveSpin, [&]() {
+    RunTest(SpinDriveFlag, NbSecsDriveSpin, [&]() {
       Nbtests = (Nbtests == 0) ? 20 : Nbtests;
       std::cerr << "\n[+] Testing cache line size (method 2):";
       CacheLineSizeSectors = TestCacheLineSizeWrapper(15000, Nbtests, 0, 2);
@@ -1647,7 +1639,7 @@ int main(int argc, char **argv)
   if (CacheNbTest)
   {
     // NUMBER
-    RunCacheTest(SpinDriveFlag, NbSecsDriveSpin, [&]() {
+    RunTest(SpinDriveFlag, NbSecsDriveSpin, [&]() {
       Nbtests = (Nbtests == 0) ? 5 : Nbtests;
       std::cerr << "\n[+] Testing cache line size (method 2):";
       CacheLineSizeSectors = TestCacheLineSizeWrapper(15000, Nbtests, 0, 2);
@@ -1657,7 +1649,7 @@ int main(int argc, char **argv)
   if (CacheMethod3)
   {
     // SIZE : method 3 (STATS)
-    RunCacheTest(SpinDriveFlag, NbSecsDriveSpin, [&]() {
+    RunTest(SpinDriveFlag, NbSecsDriveSpin, [&]() {
       std::cerr << "\n[+] Testing cache line size (method 3):";
       TestCacheLineSizeWrapper(15000, NbSectorsMethod2, NbBurstReadSectors, 3);
     });
