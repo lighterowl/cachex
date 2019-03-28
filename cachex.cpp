@@ -693,10 +693,9 @@ int TestPlextorFUACommandWorksWrapper(long int TargetSector, int NbTests)
 double TimeMultipleReads(sReadCommand &cmd, long int TargetSector, int NbReads,
                          bool FUAbit)
 {
-  int i = 0;
   double AverageDelay = 0;
 
-  for (i = 0; i < NbReads; i++)
+  for (int i = 0; i < NbReads; i++)
   {
     auto result = cmd.pFunc(TargetSector, NbBurstReadSectors, FUAbit);
     Delay = result.Duration;
@@ -733,13 +732,12 @@ void TestCacheSpeedImpact(long int TargetSector, int NbReads)
 int TestRCDBitWorks(sReadCommand &ReadCommand, long int TargetSector,
                     int NbTests)
 {
-  int i;
   int InvalidationSuccess = 0;
 
   DEBUG << "\ninfo: " << NbTests
         << " test(s), c/nc ratio: " << CachedNonCachedSpeedFactor
         << ", burst: " << NbBurstReadSectors << ", max: " << MaxCacheSectors;
-  for (i = 0; i < NbTests; i++)
+  for (int i = 0; i < NbTests; i++)
   {
     // enable caching
     if (!SetCacheRCDBit(RCD_READ_CACHE_ENABLED))
@@ -811,14 +809,14 @@ int TestRCDBitWorksWrapper(long int TargetSector, int NbTests)
 int TestCacheLineSize_Straight(sReadCommand &ReadCommand, long int TargetSector,
                                int NbMeasures)
 {
-  int i, TargetSectorOffset, CacheLineSize;
+  int TargetSectorOffset, CacheLineSize;
   int MaxCacheLineSize = 0;
   double PreviousDelay, InitialDelay;
 
   DEBUG << "\ninfo: " << NbMeasures
         << " test(s), c/nc ratio: " << CachedNonCachedSpeedFactor
         << ", burst: " << NbBurstReadSectors << ", max: " << MaxCacheSectors;
-  for (i = 0; i < NbMeasures; i++)
+  for (int i = 0; i < NbMeasures; i++)
   {
     ClearCache();
     PreviousDelay = 50;
@@ -894,14 +892,14 @@ int TestCacheLineSize_Straight(sReadCommand &ReadCommand, long int TargetSector,
 int TestCacheLineSize_Wrap(sReadCommand &ReadCommand, long int TargetSector,
                            int NbMeasures)
 {
-  int i, TargetSectorOffset, CacheLineSize;
+  int TargetSectorOffset, CacheLineSize;
   int MaxCacheLineSize = 0;
   double InitialDelay, PreviousInitDelay;
 
   DEBUG << "\ninfo: " << NbMeasures
         << " test(s), c/nc ratio: " << CachedNonCachedSpeedFactor
         << ", burst: " << NbBurstReadSectors << ", max: " << MaxCacheSectors;
-  for (i = 0; i < NbMeasures; i++)
+  for (int i = 0; i < NbMeasures; i++)
   {
     ClearCache();
 
@@ -984,7 +982,6 @@ int TestCacheLineSize_Wrap(sReadCommand &ReadCommand, long int TargetSector,
 int TestCacheLineSize_Stat(sReadCommand &ReadCommand, long int TargetSector,
                            int NbMeasures, int BurstSize)
 {
-  int i, j;
   int NbPeakMeasures;
   double Maxdelay = 0.0;
   double Threshold = 0.0;
@@ -1008,7 +1005,7 @@ int TestCacheLineSize_Stat(sReadCommand &ReadCommand, long int TargetSector,
   Measures.push_back(result.Duration);
 
   // fill in measures buffer
-  for (i = 1; i < NbMeasures; i++)
+  for (int i = 1; i < NbMeasures; i++)
   {
     result = ReadCommand.pFunc(TargetSector + i * BurstSize, BurstSize, false);
     Measures.push_back(result.Duration);
@@ -1021,7 +1018,7 @@ int TestCacheLineSize_Stat(sReadCommand &ReadCommand, long int TargetSector,
 
   // find all values above 90% of max
   Threshold = Maxdelay * ThresholdRatioMethod2;
-  for (i = 1, NbPeakMeasures = 0;
+  for (int i = 1, NbPeakMeasures = 0;
        (i < NbMeasures) && (NbPeakMeasures < PeakMeasuresIndexes.size()); i++)
   {
     if (Measures[i] > Threshold)
@@ -1032,12 +1029,12 @@ int TestCacheLineSize_Stat(sReadCommand &ReadCommand, long int TargetSector,
         << ")";
 
   // calculate stats on differences and keep max
-  for (i = 1; i < NbPeakMeasures; i++)
+  for (int i = 1; i < NbPeakMeasures; i++)
   {
     CurrentDelta = PeakMeasuresIndexes[i] - PeakMeasuresIndexes[i - 1];
     SUPERDEBUG << "\ndelta = " << CurrentDelta;
 
-    for (j = 0; j < NbPeakMeasures; j++)
+    for (int j = 0; j < NbPeakMeasures; j++)
     {
       // current delta already seen before
       if (DeltaArray[j].delta == CurrentDelta)
@@ -1067,9 +1064,9 @@ int TestCacheLineSize_Stat(sReadCommand &ReadCommand, long int TargetSector,
   }
 
   // find which sizes are multiples of others
-  for (i = 0; DeltaArray[i].delta != 0; i++)
+  for (int i = 0; DeltaArray[i].delta != 0; i++)
   {
-    for (j = 0; DeltaArray[j].delta != 0; j++)
+    for (int j = 0; DeltaArray[j].delta != 0; j++)
     {
       if ((DeltaArray[j].delta % DeltaArray[i].delta == 0) && (i != j))
       {
@@ -1079,7 +1076,7 @@ int TestCacheLineSize_Stat(sReadCommand &ReadCommand, long int TargetSector,
   }
 
   std::cerr << "\nsizes: ";
-  for (i = 0; DeltaArray[i].delta != 0; i++)
+  for (int i = 0; DeltaArray[i].delta != 0; i++)
   {
     if (i % 5 == 0)
       std::cerr << '\n';
@@ -1143,7 +1140,6 @@ int TestCacheLineSizeWrapper(long int TargetSector, int NbMeasures,
 int TestCacheLineNumber(sReadCommand &ReadCommand, long int TargetSector,
                         int NbMeasures)
 {
-  int i, j;
   int NbCacheLines = 1;
   double PreviousDelay;
   long int LocalTargetSector = TargetSector;
@@ -1154,7 +1150,7 @@ int TestCacheLineNumber(sReadCommand &ReadCommand, long int TargetSector,
     std::cerr << "\n";
   }
 
-  for (i = 0; i < NbMeasures; i++)
+  for (int i = 0; i < NbMeasures; i++)
   {
     ClearCache();
     NbCacheLines = 1;
@@ -1166,7 +1162,7 @@ int TestCacheLineNumber(sReadCommand &ReadCommand, long int TargetSector,
     SUPERDEBUG << "\n first read at " << LocalTargetSector << ": "
                << std::setprecision(2) << PreviousDelay;
 
-    for (j = 1; j < MAX_CACHE_LINES; j++)
+    for (int j = 1; j < MAX_CACHE_LINES; j++)
     {
       // second read to load another (?) cache line
       ReadCommand.pFunc(LocalTargetSector + 10000, 1, false);
@@ -1216,13 +1212,13 @@ int TestPlextorFUAInvalidationSize(sReadCommand &ReadCommand,
 {
 #define CACHE_TEST_BLOCK 20
 
-  int i, TargetSectorOffset;
+  int TargetSectorOffset;
   int InvalidatedSize = 0;
   double InitialDelay;
 
   DEBUG << "\ninfo: using c/nc ratio : " << CachedNonCachedSpeedFactor;
 
-  for (i = 0; i < NbMeasures; i++)
+  for (int i = 0; i < NbMeasures; i++)
   {
     for (TargetSectorOffset = 2000; TargetSectorOffset >= 0;
          TargetSectorOffset -= CACHE_TEST_BLOCK)
@@ -1387,7 +1383,6 @@ void PrintUsage()
 int main(int argc, char **argv)
 {
   const char *DrivePath = nullptr;
-  int i, v;
   int MaxReadSpeed = 0;
   bool SpinDriveFlag = false;
   bool ShowDriveInfos = false;
@@ -1417,7 +1412,7 @@ int main(int argc, char **argv)
     PrintUsage();
     return (-1);
   }
-  for (i = 1; i < argc; i++)
+  for (int i = 1; i < argc; i++)
   {
     if (argv[i][0] == '-')
     {
@@ -1478,9 +1473,11 @@ int main(int argc, char **argv)
         NbSectorsMethod2 = atoi(argv[++i]);
         break;
       case 't':
-        v = atoi(argv[++i]);
+      {
+        int v = std::stoi(argv[++i]);
         ThresholdRatioMethod2 = v / 100.0;
         break;
+      }
       case 'x':
         CachedNonCachedSpeedFactor = atoi(argv[++i]);
         break;
