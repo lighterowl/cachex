@@ -983,7 +983,7 @@ int TestCacheLineSize_Wrap(sReadCommand &ReadCommand, long int TargetSector,
 int TestCacheLineSize_Stat(sReadCommand &ReadCommand, long int TargetSector,
                            int NbMeasures, int BurstSize)
 {
-  int NbPeakMeasures;
+  int NbPeakMeasures = 0;
   double Maxdelay = 0.0;
   double Threshold = 0.0;
   std::vector<double> Measures;
@@ -1019,7 +1019,7 @@ int TestCacheLineSize_Stat(sReadCommand &ReadCommand, long int TargetSector,
 
   // find all values above 90% of max
   Threshold = Maxdelay * ThresholdRatioMethod2;
-  for (int i = 1, NbPeakMeasures = 0;
+  for (int i = 1;
        (i < NbMeasures) && (NbPeakMeasures < PeakMeasuresIndexes.size()); i++)
   {
     if (Measures[i] > Threshold)
