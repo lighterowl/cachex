@@ -49,6 +49,7 @@ struct platform
 #include <array>
 #include <iomanip>
 #include <iostream>
+#include <string>
 #include <vector>
 
 #define MAX_CACHE_LINES 10
