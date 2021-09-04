@@ -584,6 +584,29 @@ bool SetCacheRCDBit(bool RCDBitValue)
   return (retval);
 }
 
+bool TestSupportedFlushCommands()
+{
+  std::cerr << "\n[+] Supported cache flush commands:";
+  bool rv = false;
+  for (auto &&cmd : Commands)
+  {
+      if (cmd.FUAbitSupported)
+      {
+        if (cmd.pFunc(9900, 0, true))
+        {
+           rv = true;
+           std::cerr << ' ' << cmd.Name;
+        }
+        else
+        {
+           SUPERDEBUG << "\ncommand " << cmd.Name << " rejected";
+           RequestSense();
+        }
+      }
+  }
+  return rv;
+}
+
 //------------------------------------------------------------------------------
 // void TestSupportedReadCommands(char DriveLetter)
 //
@@ -1539,9 +1562,14 @@ int main(int argc, char **argv)
   if (ShowDriveInfos)
   {
     ShowCacheValues();
+    if (!TestSupportedFlushCommands())
+    {
+      std::cerr << "\nError: no supported flush commands found\n";
+      exit(-1);
+    }
     if (!TestSupportedReadCommands())
     {
-      std::cerr << "\nError: no supported commands found\n";
+      std::cerr << "\nError: no supported read commands found\n";
       exit(-1);
     }
   }
