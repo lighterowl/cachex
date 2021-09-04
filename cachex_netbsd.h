@@ -15,8 +15,8 @@
 #include <cstring>
 #include <time.h>
 
-#include <sys/scsiio.h>
 #include <sys/ioctl.h>
+#include <sys/scsiio.h>
 
 namespace netbsd_detail
 {
@@ -29,7 +29,7 @@ void req_io_exec(int fd, scsireq_t &io, CommandResult &rv)
   timespecsub(&ts2, &ts1, &ts);
   rv.Valid = (io_rv == 0);
   rv.ScsiStatus = io.retsts;
-  rv.Duration = (double) ((ts.tv_sec * 100000) + (ts.tv_nsec / 10000)) / 100;
+  rv.Duration = (double)((ts.tv_sec * 100000) + (ts.tv_nsec / 10000)) / 100;
 }
 
 template <std::size_t CDBLength>
@@ -45,7 +45,7 @@ scsireq_t req_io_common(const std::array<std::uint8_t, CDBLength> &cdb)
 
 template <std::size_t CDBLength>
 scsireq_t req_io_for_read(CommandResult &rv,
-                           const std::array<std::uint8_t, CDBLength> &cdb)
+                          const std::array<std::uint8_t, CDBLength> &cdb)
 {
   auto io = req_io_common(cdb);
   io.flags = SCCMD_READ;
@@ -56,7 +56,7 @@ scsireq_t req_io_for_read(CommandResult &rv,
 
 template <std::size_t CDBLength>
 scsireq_t req_io_for_write(const std::vector<std::uint8_t> &data,
-                            const std::array<std::uint8_t, CDBLength> &cdb)
+                           const std::array<std::uint8_t, CDBLength> &cdb)
 {
   auto io = req_io_common(cdb);
   io.flags = SCCMD_WRITE;

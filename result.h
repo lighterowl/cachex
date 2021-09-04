@@ -17,10 +17,8 @@ struct CommandResult
   double Duration;
   bool Valid;
   std::uint8_t ScsiStatus;
-  
-  operator bool() const {
-      return Valid && ScsiStatus == ScsiStatus::GOOD;
-  }
+
+  operator bool() const { return Valid && ScsiStatus == ScsiStatus::GOOD; }
 };
 
 #endif

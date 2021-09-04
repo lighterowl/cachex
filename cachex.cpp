@@ -419,10 +419,9 @@ sReadCommand &GetSupportedCommand()
 
 sReadCommand *GetFUASupportedCommand()
 {
-  auto it =
-      std::find_if(std::begin(Commands), std::end(Commands), [](auto &&cmd) {
-        return cmd.Supported && cmd.FUAbitSupported;
-      });
+  auto it = std::find_if(std::begin(Commands), std::end(Commands),
+                         [](auto &&cmd)
+                         { return cmd.Supported && cmd.FUAbitSupported; });
   return it == std::end(Commands) ? nullptr : &(*it);
 }
 
@@ -590,19 +589,19 @@ bool TestSupportedFlushCommands()
   bool rv = false;
   for (auto &&cmd : Commands)
   {
-      if (cmd.FUAbitSupported)
+    if (cmd.FUAbitSupported)
+    {
+      if (cmd.pFunc(9900, 0, true))
       {
-        if (cmd.pFunc(9900, 0, true))
-        {
-           rv = true;
-           std::cerr << ' ' << cmd.Name;
-        }
-        else
-        {
-           SUPERDEBUG << "\ncommand " << cmd.Name << " rejected";
-           RequestSense();
-        }
+        rv = true;
+        std::cerr << ' ' << cmd.Name;
       }
+      else
+      {
+        SUPERDEBUG << "\ncommand " << cmd.Name << " rejected";
+        RequestSense();
+      }
+    }
   }
   return rv;
 }
@@ -1622,22 +1621,26 @@ int main(int argc, char **argv)
   //
   if (TestPlextorFUA && TestPlextorFUACommand())
   {
-    RunTest(SpinDriveFlag, NbSecsDriveSpin, [&]() {
-      Nbtests = (Nbtests == 0) ? 5 : Nbtests;
-      std::cerr << "\n[+] Plextor flush tests: ";
-      std::cerr << TestPlextorFUACommandWorksWrapper(15000, Nbtests) << '/'
-                << Nbtests;
+    RunTest(SpinDriveFlag, NbSecsDriveSpin,
+            [&]()
+            {
+              Nbtests = (Nbtests == 0) ? 5 : Nbtests;
+              std::cerr << "\n[+] Plextor flush tests: ";
+              std::cerr << TestPlextorFUACommandWorksWrapper(15000, Nbtests)
+                        << '/' << Nbtests;
 
-      if (PFUAInvalidationSizeTest)
-      {
-        // 4) Find the size of data invalidated  by Plextor FUA command
-        std::cerr << "\n[+] Testing invalidation of Plextor flush command: ";
-        InvalidatedSectors = TestPlextorFUAInvalidationSizeWrapper(15000, 1);
-        std::cerr << "\nresult: "
-                  << ((InvalidatedSectors > 0) ? "ok" : "not working") << " ("
-                  << InvalidatedSectors << ')';
-      }
-    });
+              if (PFUAInvalidationSizeTest)
+              {
+                // 4) Find the size of data invalidated  by Plextor FUA command
+                std::cerr
+                    << "\n[+] Testing invalidation of Plextor flush command: ";
+                InvalidatedSectors =
+                    TestPlextorFUAInvalidationSizeWrapper(15000, 1);
+                std::cerr << "\nresult: "
+                          << ((InvalidatedSectors > 0) ? "ok" : "not working")
+                          << " (" << InvalidatedSectors << ')';
+              }
+            });
   }
 
   //
@@ -1647,40 +1650,52 @@ int main(int argc, char **argv)
   if (CacheMethod1)
   {
     // SIZE : method 1
-    RunTest(SpinDriveFlag, NbSecsDriveSpin, [&]() {
-      Nbtests = (Nbtests == 0) ? 10 : Nbtests;
-      std::cerr << "\n[+] Testing cache line size:";
-      CacheLineSizeSectors = TestCacheLineSizeWrapper(15000, Nbtests, 0, 1);
-    });
+    RunTest(SpinDriveFlag, NbSecsDriveSpin,
+            [&]()
+            {
+              Nbtests = (Nbtests == 0) ? 10 : Nbtests;
+              std::cerr << "\n[+] Testing cache line size:";
+              CacheLineSizeSectors =
+                  TestCacheLineSizeWrapper(15000, Nbtests, 0, 1);
+            });
   }
 
   if (CacheMethod2)
   {
     // SIZE : method 2
-    RunTest(SpinDriveFlag, NbSecsDriveSpin, [&]() {
-      Nbtests = (Nbtests == 0) ? 20 : Nbtests;
-      std::cerr << "\n[+] Testing cache line size (method 2):";
-      CacheLineSizeSectors = TestCacheLineSizeWrapper(15000, Nbtests, 0, 2);
-    });
+    RunTest(SpinDriveFlag, NbSecsDriveSpin,
+            [&]()
+            {
+              Nbtests = (Nbtests == 0) ? 20 : Nbtests;
+              std::cerr << "\n[+] Testing cache line size (method 2):";
+              CacheLineSizeSectors =
+                  TestCacheLineSizeWrapper(15000, Nbtests, 0, 2);
+            });
   }
 
   if (CacheNbTest)
   {
     // NUMBER
-    RunTest(SpinDriveFlag, NbSecsDriveSpin, [&]() {
-      Nbtests = (Nbtests == 0) ? 5 : Nbtests;
-      std::cerr << "\n[+] Testing cache line size (method 2):";
-      CacheLineSizeSectors = TestCacheLineSizeWrapper(15000, Nbtests, 0, 2);
-    });
+    RunTest(SpinDriveFlag, NbSecsDriveSpin,
+            [&]()
+            {
+              Nbtests = (Nbtests == 0) ? 5 : Nbtests;
+              std::cerr << "\n[+] Testing cache line size (method 2):";
+              CacheLineSizeSectors =
+                  TestCacheLineSizeWrapper(15000, Nbtests, 0, 2);
+            });
   }
 
   if (CacheMethod3)
   {
     // SIZE : method 3 (STATS)
-    RunTest(SpinDriveFlag, NbSecsDriveSpin, [&]() {
-      std::cerr << "\n[+] Testing cache line size (method 3):";
-      TestCacheLineSizeWrapper(15000, NbSectorsMethod2, NbBurstReadSectors, 3);
-    });
+    RunTest(SpinDriveFlag, NbSecsDriveSpin,
+            [&]()
+            {
+              std::cerr << "\n[+] Testing cache line size (method 3):";
+              TestCacheLineSizeWrapper(15000, NbSectorsMethod2,
+                                       NbBurstReadSectors, 3);
+            });
   }
 
   if (CacheMethod4)
