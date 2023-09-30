@@ -1,5 +1,5 @@
 /*******************************************************************************
- * CacheExplorer 0.11  dkk089@gmail.com    2019/03, based on :
+ * CacheExplorer 0.12  dkk089@gmail.com    2019/03, based on :
  * CacheExplorer 0.9   spath@cdfreaks.com  2006/xx
  ******************************************************************************/
 
@@ -743,11 +743,11 @@ void TestCacheSpeedImpact(long int TargetSector, int NbReads)
   }
 
   cmd->pFunc(TargetSector, NbBurstReadSectors, false); // initial load
-  std::cerr << "\n[+] Read at " << cmd->Name << ", " << std::setprecision(2)
+  std::cerr << "\n[+] Read with " << cmd->Name << ", " << std::setprecision(2)
             << TimeMultipleReads(*cmd, TargetSector, NbReads, false) << " ms";
 
   std::cerr << ", with FUA "
-            << TimeMultipleReads(*cmd, TargetSector, NbReads, true);
+            << TimeMultipleReads(*cmd, TargetSector, NbReads, true) << " ms";
 }
 
 //
@@ -1044,7 +1044,7 @@ int TestCacheLineSize_Stat(sReadCommand &ReadCommand, long int TargetSector,
   // find all values above 90% of max
   Threshold = Maxdelay * ThresholdRatioMethod2;
   for (int i = 1;
-       (i < NbMeasures) && (NbPeakMeasures < PeakMeasuresIndexes.size()); i++)
+       (i < NbMeasures) && (NbPeakMeasures < static_cast<int>(PeakMeasuresIndexes.size())); i++)
   {
     if (Measures[i] > Threshold)
       PeakMeasuresIndexes[NbPeakMeasures++] = i;
@@ -1355,20 +1355,6 @@ void RunTest(bool SpinDriveFlag, unsigned int SpinSeconds, TestFn &&fn)
   platform::set_normal_priority();
 }
 
-/*
-
-  modifiers      l   b   x   r   s   m   n
-commands
-   c1        v           v   v   .   v
-   c2        v           v   v   v   .
-   c3        .           v   v   .   .
-   p         v           v   v   .   v
-   k         .   .   v   v   v   .   v
-   i         .   .   .   .   .   .   .
-   w         v   .   v   .   v   .   v
-
-*/
-
 void PrintUsage()
 {
   std::cerr << "\nUsage:   cachex <commands> <options> <drive letter>\n";
@@ -1379,6 +1365,7 @@ void PrintUsage()
   std::cerr << "           -p     : test plextor FUA command\n";
   std::cerr << "           -k     : test cache disabling\n";
   std::cerr << "           -w     : test cache line numbers\n";
+  std::cerr << "           -z     : test cache speed impact\n";
   std::cerr << "\nOptions:   -d     : show debug info\n";
   std::cerr
       << "           -l xx  : spin drive for xx seconds before starting to "
@@ -1420,18 +1407,19 @@ int main(int argc, char **argv)
   bool CacheNbTest = false;
   bool PFUAInvalidationSizeTest = false;
   bool TestRCDBit = false;
+  bool TestSpeedImpact = false;
   int NbSecsDriveSpin = 10;
   int NbSectorsMethod2 = 1000;
   int InvalidatedSectors = 0;
   int Nbtests = 0;
   const char *UserReadCommand = nullptr;
 
-  // --------------- setup ---------------------------
+         // --------------- setup ---------------------------
   std::cerr
-      << "\nCacheExplorer 0.11 - https://github.com/xavery/cachex, based on";
+      << "\nCacheExplorer 0.12 - https://github.com/xavery/cachex, based on";
   std::cerr << "\nCacheExplorer 0.9 - spath@cdfreaks.com\n";
 
-  // ------------ command line parsing --------------
+         // ------------ command line parsing --------------
   if (argc < 2)
   {
     PrintUsage();
@@ -1508,6 +1496,9 @@ int main(int argc, char **argv)
         break;
       case 'n':
         Nbtests = atoi(argv[++i]);
+        break;
+      case 'z':
+        TestSpeedImpact = true;
         break;
 
         // non documented options
@@ -1680,9 +1671,8 @@ int main(int argc, char **argv)
             [&]()
             {
               Nbtests = (Nbtests == 0) ? 5 : Nbtests;
-              std::cerr << "\n[+] Testing cache line size (method 2):";
-              CacheLineSizeSectors =
-                  TestCacheLineSizeWrapper(15000, Nbtests, 0, 2);
+              std::cerr << "\n[+] Testing cache line numbers : "
+                        << TestCacheLineNumberWrapper(15000, Nbtests);
             });
   }
 
@@ -1721,6 +1711,17 @@ int main(int argc, char **argv)
         std::cerr << "not supported";
       }
     }
+  }
+
+  if (TestSpeedImpact)
+  {
+    RunTest(SpinDriveFlag, NbSecsDriveSpin,
+            [&]()
+            {
+              Nbtests = (Nbtests == 0) ? 5 : Nbtests;
+              std::cerr << "\n[+] Testing cache speed impact";
+              TestCacheSpeedImpact(10000, Nbtests);
+            });
   }
 
   std::cerr << '\n';
