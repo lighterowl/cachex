@@ -623,15 +623,18 @@ bool TestSupportedReadCommands()
       rv = true;
       std::cerr << ' ' << cmd.Name;
       cmd.Supported = true;
-      if (cmd.FUAbitSupported && cmd.pFunc(9900, 1, true))
+      if (cmd.FUAbitSupported)
       {
-        std::cerr << "(FUA)";
-      }
-      else
-      {
-        SUPERDEBUG << "\ncommand " << cmd.Name << " with FUA bit rejected";
-        cmd.FUAbitSupported = false;
-        RequestSense();
+        if (cmd.pFunc(9900, 1, true))
+        {
+          std::cerr << "(FUA)";
+        }
+        else
+        {
+          SUPERDEBUG << "\ncommand " << cmd.Name << " with FUA bit rejected";
+          cmd.FUAbitSupported = false;
+          RequestSense();
+        }
       }
     }
     else
