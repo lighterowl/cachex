@@ -17,3 +17,6 @@ jobs:
 
     - name: Build with GCC
       run: g++ -Wall -Wextra -std=c++20 cachex.cpp
+
+    - name: Build with Clang
+      run: clang++ -Wall -Wextra -std=c++20 cachex.cpp
