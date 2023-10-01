@@ -391,6 +391,13 @@ CommandResult Read_D8h(long int TargetSector, int NbSectors, bool FUAbit)
 
 struct sReadCommand
 {
+  sReadCommand(const char *name, CommandResult (*func)(long int, int, bool),
+               bool fua)
+      : Name(name), pFunc(func), Supported(false), FUAbitSupported(fua)
+  {
+  }
+
+  sReadCommand &operator=(const sReadCommand &) = delete;
   sReadCommand(const sReadCommand &) = delete;
 
   const char *const Name;
@@ -400,13 +407,13 @@ struct sReadCommand
   bool operator==(const char *name) const { return strcmp(Name, name) == 0; }
 };
 
-std::array<sReadCommand, 7> Commands = {{{"BEh", &Read_BEh, false, false},
-                                         {"A8h", &Read_A8h, false, true},
-                                         {"28h", &Read_28h, false, true},
-                                         {"28h_12", &Read_28h_12, false, true},
-                                         {"D4h", &Read_D4h, false, true},
-                                         {"D5h", &Read_D5h, false, true},
-                                         {"D8h", &Read_D8h, false, true}}};
+std::array<sReadCommand, 7> Commands = {{{"BEh", &Read_BEh, false},
+                                         {"A8h", &Read_A8h, true},
+                                         {"28h", &Read_28h, true},
+                                         {"28h_12", &Read_28h_12, true},
+                                         {"D4h", &Read_D4h, true},
+                                         {"D5h", &Read_D5h, true},
+                                         {"D8h", &Read_D8h, true}}};
 
 sReadCommand &GetSupportedCommand()
 {
@@ -1047,7 +1054,9 @@ int TestCacheLineSize_Stat(sReadCommand &ReadCommand, long int TargetSector,
   // find all values above 90% of max
   Threshold = Maxdelay * ThresholdRatioMethod2;
   for (int i = 1;
-       (i < NbMeasures) && (NbPeakMeasures < static_cast<int>(PeakMeasuresIndexes.size())); i++)
+       (i < NbMeasures) &&
+       (NbPeakMeasures < static_cast<int>(PeakMeasuresIndexes.size()));
+       i++)
   {
     if (Measures[i] > Threshold)
       PeakMeasuresIndexes[NbPeakMeasures++] = i;
@@ -1417,12 +1426,12 @@ int main(int argc, char **argv)
   int Nbtests = 0;
   const char *UserReadCommand = nullptr;
 
-         // --------------- setup ---------------------------
+  // --------------- setup ---------------------------
   std::cerr
       << "\nCacheExplorer 0.12 - https://github.com/xavery/cachex, based on";
   std::cerr << "\nCacheExplorer 0.9 - spath@cdfreaks.com\n";
 
-         // ------------ command line parsing --------------
+  // ------------ command line parsing --------------
   if (argc < 2)
   {
     PrintUsage();
