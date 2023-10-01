@@ -1,0 +1,19 @@
+name: C++ CI (Linux)
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  build-ubu:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v1
+
+    - name: Build with GCC
+      run: g++ -Wall -Wextra -std=c++20 cachex.cpp
