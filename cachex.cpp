@@ -370,7 +370,7 @@ CommandResult Read_BEh(long int TargetSector, int NbSectors, bool)
   return ExecSectorCommand(NbSectors,
                            Command::Read_BEh(TargetSector, NbSectors));
 }
-#error blarg
+
 CommandResult Read_D4h(long int TargetSector, int NbSectors, bool FUAbit)
 {
   return ExecSectorCommand(NbSectors,
