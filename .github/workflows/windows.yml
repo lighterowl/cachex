@@ -1,0 +1,20 @@
+name: C++ CI (Windows)
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  build-win:
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v1
+
+    - name: Build with MSVC
+      shell: cmd
+      run: .github/workflow_build_windows.bat
