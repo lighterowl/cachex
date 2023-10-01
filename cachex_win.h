@@ -70,15 +70,10 @@ template <std::size_t CDBLength>
 SCSI_PASS_THROUGH_DIRECT
 sptd_common(const std::array<std::uint8_t, CDBLength> &cdb)
 {
-  SCSI_PASS_THROUGH_DIRECT sptd;
+  auto sptd = SCSI_PASS_THROUGH_DIRECT{};
   sptd.Length = sizeof(sptd);
-  sptd.PathId = 0;            // SCSI card ID will be filled in automatically
-  sptd.TargetId = 0;          // SCSI target ID will also be filled in
-  sptd.Lun = 0;               // SCSI lun ID will also be filled in
   sptd.CdbLength = CDBLength; // CDB size
-  sptd.SenseInfoLength = 0;   // Don't return any sense data
   sptd.TimeOutValue = 60;     // SCSI timeout value
-  sptd.SenseInfoOffset = 0;
   std::copy(std::begin(cdb), std::end(cdb), sptd.Cdb);
   return sptd;
 }
