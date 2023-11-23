@@ -1406,6 +1406,7 @@ void PrintUsage()
 
 int main(int argc, char **argv)
 {
+  std::cerr << std::fixed;
   const char *DrivePath = nullptr;
   int MaxReadSpeed = 0;
   bool SpinDriveFlag = false;

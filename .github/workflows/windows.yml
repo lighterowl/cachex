@@ -18,3 +18,8 @@ jobs:
     - name: Build with MSVC
       shell: cmd
       run: .github/workflow_build_windows.bat
+
+    - uses: actions/upload-artifact@v3
+      with:
+        name: cachex Windows
+        path: cachex.7z
