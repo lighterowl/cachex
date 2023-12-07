@@ -56,14 +56,21 @@ void sptd_exec(HANDLE handle, SCSI_PASS_THROUGH_DIRECT &sptd, CommandResult &rv)
 
   windows_detail::MP_QueryPerformanceCounter(&PerfCountStart);
   auto io_ok = DeviceIoControl(handle, IOCTL_SCSI_PASS_THROUGH_DIRECT, &sptd,
-                               sizeof(SCSI_PASS_THROUGH_DIRECT), NULL, 0,
+                               sizeof(sptd), &sptd, sizeof(sptd),
                                &dwBytesReturned, NULL);
   windows_detail::MP_QueryPerformanceCounter(&PerfCountEnd);
 
-  rv.Valid = io_ok ? true : false;
-  rv.Duration = (PerfCountEnd.QuadPart - PerfCountStart.QuadPart) / freq;
-  rv.Data.resize(sptd.DataTransferLength);
-  rv.ScsiStatus = sptd.ScsiStatus;
+  if (io_ok && dwBytesReturned == sizeof(sptd))
+  {
+    rv.Valid = true;
+    rv.Duration = (PerfCountEnd.QuadPart - PerfCountStart.QuadPart) / freq;
+    rv.Data.resize(sptd.DataTransferLength);
+    rv.ScsiStatus = sptd.ScsiStatus;
+  }
+  else
+  {
+    rv.Valid = false;
+  }
 }
 
 template <std::size_t CDBLength>
