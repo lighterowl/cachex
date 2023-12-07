@@ -1,5 +1,5 @@
 /*******************************************************************************
- * CacheExplorer 0.13  dkk089@gmail.com    2019/03, based on :
+ * CacheExplorer 0.14  dkk089@gmail.com    2019/03, based on :
  * CacheExplorer 0.9   spath@cdfreaks.com  2006/xx
  ******************************************************************************/
 
@@ -1429,7 +1429,7 @@ int main(int argc, char **argv)
 
   // --------------- setup ---------------------------
   std::cerr
-      << "\nCacheExplorer 0.13 - https://github.com/xavery/cachex, based on";
+      << "\nCacheExplorer 0.14 - https://github.com/xavery/cachex, based on";
   std::cerr << "\nCacheExplorer 0.9 - spath@cdfreaks.com\n";
 
   // ------------ command line parsing --------------
