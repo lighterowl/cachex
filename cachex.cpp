@@ -1568,7 +1568,6 @@ int main(int argc, char **argv)
     if (!TestSupportedFlushCommands())
     {
       std::cerr << "\nError: no supported flush commands found\n";
-      exit(-1);
     }
     if (!TestSupportedReadCommands())
     {
